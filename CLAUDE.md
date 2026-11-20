@@ -1,6 +1,7 @@
 @AGENTS.md
 
-## Claude-spezifisch
+## Per Claude
 
-- Antworten auf Deutsch. Code, Bezeichner und Firmware-UI-Texte bleiben unverändert (Firmware-Texte ASCII).
-- Subagenten nur für breite Suchen im großen `TamaPoke.ino` (210 KB) oder lange Build-Logs; Änderungen an Firmware, Save-Struktur und Installer selbst vornehmen.
+- Rispondi in italiano. Codice, identificatori e testi della firmware restano come sono (testi firmware in ASCII).
+- Usa subagenti solo per ricerche ampie in `TamaPoke.ino` o per log di build lunghi; le modifiche a firmware,
+  salvataggi e workflow falle direttamente.

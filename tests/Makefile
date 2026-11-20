@@ -3,12 +3,14 @@ CXXFLAGS ?= -std=c++17 -Wall -Wextra -Werror -I../tests/stubs -I..
 
 PET_TEST_OBJS = build/pet_tests.o build/pet.o build/species_chirp.o build/thumb_format.o build/audio_stub.o
 BATTLE_TEST_OBJS = build/battle_tests.o build/battle.o
+NET_TEST_OBJS = build/net_tests.o build/netlogic.o
 
 .PHONY: test web-test clean
 
-test: build/pet_tests build/battle_tests web-test
+test: build/pet_tests build/battle_tests build/net_tests web-test
 	./build/pet_tests
 	./build/battle_tests
+	./build/net_tests
 
 web-test:
 	node web_serial_tests.mjs
@@ -42,6 +44,15 @@ build/battle_tests.o: battle_tests.cpp ../battle.h | build
 
 build/battle.o: ../battle.cpp ../battle.h | build
 	$(CXX) $(CXXFLAGS) -c ../battle.cpp -o $@
+
+build/net_tests: $(NET_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(NET_TEST_OBJS) -o $@
+
+build/net_tests.o: net_tests.cpp ../netlogic.h | build
+	$(CXX) $(CXXFLAGS) -c net_tests.cpp -o $@
+
+build/netlogic.o: ../netlogic.cpp ../netlogic.h | build
+	$(CXX) $(CXXFLAGS) -c ../netlogic.cpp -o $@
 
 clean:
 	rm -rf build

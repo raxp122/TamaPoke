@@ -27,6 +27,7 @@
 #include "time_utils.h"
 #include "dayphase.h"
 #include "imu.h"
+#include "netota.h"
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
@@ -39,7 +40,11 @@
 #ifdef TAMAPOKE_LOCAL_TEST
 #define FW_VERSION "1.36.2-hoenn-walk-local"
 #elif defined(TAMAPOKE_GEN3_RELEASE)
+#if __has_include("version_ci.h")
+#include "version_ci.h"  // written by the release workflow: 1.37.<build number>
+#else
 #define FW_VERSION "1.36.2"
+#endif
 #else
 #define FW_VERSION "1.35.3-soft-step"
 #endif
@@ -98,6 +103,23 @@ bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 bool powerSave = false;       // ahorro opcional: off por defecto
 bool helpOpen = false;
+// Wi-Fi y actualizaciones: capa sobre los ajustes (clockOpen sigue en true)
+enum NetPage : uint8_t { NETP_WIFI, NETP_SCAN, NETP_PASS, NETP_UPDATE };
+bool netOpen = false;
+uint8_t netPage = NETP_WIFI;
+bool netDirty = false;
+uint32_t netSeenGen = 0;
+int8_t netForgetIdx = -1;
+uint8_t netListPage = 0, netScanPage = 0;
+char pwSsid[NET_SSID_LEN + 1] = "";
+char pwBuf[NET_PASS_LEN + 1] = "";
+uint8_t pwLen = 0;
+uint8_t pwMode = 0;  // 0 minusculas, 1 mayusculas, 2 simbolos
+void openNet(uint8_t page);
+void closeNet();
+void renderNet();
+void netTap(int16_t x, int16_t y);
+void netService(uint32_t now);
 uint8_t helpPage = 0;
 bool uiDirty = true;
 bool cardDirty = true;
@@ -314,6 +336,7 @@ void markUiDirty() {
   gameMenuDirty = true;
   battleDirty = true;
   galleryDirty = true;
+  netDirty = true;
 }
 
 void lockTouchBrief(uint16_t ms = 160) {
@@ -331,6 +354,7 @@ const char *screenName() {
   if (battleOpen) return battleResolved ? "battle-result" : "battle";
   if (kbOpen) return "keyboard";
   if (helpOpen) return "help";
+  if (netOpen) return "net";
   if (clockOpen) return "settings";
   if (cardOpen) return "card";
   if (gameMenuOpen) return "game-menu";
@@ -344,6 +368,7 @@ bool staticScreenClean() {
   if (battleOpen && battleResolved) return !battleDirty;
   if (kbOpen) return !keyboardDirty;
   if (helpOpen) return !helpDirty;
+  if (netOpen) return !netDirty;
   if (clockOpen) return !clockDirty;
   if (cardOpen) return !cardDirty;
   if (gameMenuOpen) return !gameMenuDirty;
@@ -411,6 +436,7 @@ void setup() {
   }
   pet.syncClock(e);
   loadPowerSave();
+  netBegin(FW_VERSION);
   imuBegin();
 
   audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
@@ -420,6 +446,7 @@ void setup() {
 
 // carga/descarga el sprite de SD cuando cambia la especie
 void ensureMon() {
+  if (otaSdBusy()) return;  // la actualizacion esta escribiendo en la SD
   if (pet.speciesId == monFor && monShinyFor == pet.shiny && !sdDirty) return;
   sdDirty = false;
   monFor = pet.speciesId;
@@ -468,6 +495,7 @@ uint16_t renderIntervalMs() {
 }
 
 bool lightSleepAllowed(uint32_t now) {
+  if (netBusy()) return false;  // Wi-Fi encendido
   if (!powerSave || usbPresent() || audioBusy() || Serial.available()) return false;
   if (!screenOff && dimStage == 0) return false;
   if (!screenOff && now - lastInteract < 1500UL) return false;
@@ -529,6 +557,7 @@ void loop() {
 
   handleTouch();
   handleSerial();
+  netService(now);
   ensureMon();
   setPowerCacheInterval(powerSave ? 10000UL : 2000UL);
   pet.ensureDailyGoals();
@@ -1078,6 +1107,7 @@ void openStepsCard();
 void drawStepsHud();
 
 void onSwipeV(int dir) {
+  if (netOpen) { closeNet(); return; }
   if (helpOpen) { helpOpen = false; clockOpen = true; clockDirty = true; lockTouchBrief(); sfxPlay(SFX_TAP); return; }
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (wildPromptUntil && deadlineActive(millis(), wildPromptUntil)) return;
@@ -1102,6 +1132,7 @@ void onSwipeV(int dir) {
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
+  if (netOpen) return;
   if (helpOpen) {
     if (dir < 0 && helpPage + 1 < HELP_PAGE_COUNT) { helpPage++; helpDirty = true; }
     else if (dir > 0 && helpPage > 0) { helpPage--; helpDirty = true; }
@@ -1226,6 +1257,10 @@ void onTap(int16_t x, int16_t y) {
   }
   if (helpOpen) {
     helpTap(x, y);
+    return;
+  }
+  if (netOpen) {
+    netTap(x, y);
     return;
   }
   if (clockOpen) {
@@ -1703,6 +1738,7 @@ void render() {
     gameMenuDirty = true;
     battleDirty = true;
     galleryDirty = true;
+    netDirty = true;
   }
   if (staticScreenClean()) { perfRenderSkipCount++; return; }
   if (pet.awaitingStarter()) {  // primera partida: region y starter (prioridad total)
@@ -1732,6 +1768,10 @@ void render() {
   }
   if (helpOpen) {
     renderHelp();
+    return;
+  }
+  if (netOpen) {
+    renderNet();
     return;
   }
   if (clockOpen) {
@@ -3501,6 +3541,11 @@ void drawClockBtn(int x, int y, const char *l) {
 #define SOUND_PILL_W 116
 #define PSAVE_PILL_X 150
 #define PSAVE_PILL_W 176
+#define NET_PILL_Y 334
+#define NET_PILL_H 32
+#define NET_PILL_W 146
+#define NET_PILL_X1 82
+#define NET_PILL_X2 238
 
 const char *soundModeLabel() {
   switch (audioMode()) {
@@ -3523,16 +3568,6 @@ static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT"
 
 const char *powerSaveLabel() {
   return powerSave ? T(S_PSAVE_ON) : T(S_PSAVE_OFF);
-}
-
-void drawStatusLine(int y, const char *label, const char *value, uint16_t valueColor) {
-  gfx->setTextSize(1);
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(94, y);
-  gfx->print(label);
-  gfx->setTextColor(valueColor);
-  gfx->setCursor(172, y);
-  gfx->print(value);
 }
 
 static const char *const HELP_WORD[LANG_COUNT] = { "AYUDA", "HELP", "AIDE", "HILFE", "AIUTO", "AJUDA" };
@@ -3755,12 +3790,22 @@ void renderClock() {
   gfx->setCursor(LANG_PILL_X + (LANG_PILL_W - (int)strlen(lp) * 12) / 2, LANG_PILL_Y + 8);
   gfx->print(lp);
 
-  char fwLine[34];
-  snprintf(fwLine, sizeof(fwLine), "v%s", FW_VERSION);
-  drawStatusLine(334, "FW", fwLine, UI_INK);
-  drawStatusLine(348, "SAVE", pet.saveLoadedFromNvs ? T(S_OK) : T(S_STATUS_NEW), pet.saveLoadedFromNvs ? UI_BAR_OK : UI_BAR_WARN);
-  drawStatusLine(362, "SD", sdReady ? "OK" : "NO", sdReady ? UI_BAR_OK : UI_BAR_WARN);
-  drawStatusLine(376, "SPR", (pmd.loaded || mon.loaded) ? T(S_OK) : T(S_STATUS_FLASH_NO), (pmd.loaded || mon.loaded) ? UI_BAR_OK : UI_BAR_WARN);
+  // Wi-Fi y actualizaciones
+  bool upd = otaUpdateAvailable();
+  gfx->fillRoundRect(NET_PILL_X1, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, UI_WHITE);
+  gfx->drawRoundRect(NET_PILL_X1, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, UI_INK);
+  gfx->fillRoundRect(NET_PILL_X2, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, upd ? UI_BAR_WARN : UI_WHITE);
+  gfx->drawRoundRect(NET_PILL_X2, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, UI_INK);
+  gfx->setTextSize(2);
+  gfx->setTextColor(UI_INK);
+  const char *wl = T(S_WIFI);
+  gfx->setCursor(NET_PILL_X1 + (NET_PILL_W - (int)strlen(wl) * 12) / 2, NET_PILL_Y + 8);
+  gfx->print(wl);
+  char ul[16];
+  snprintf(ul, sizeof(ul), "%.11s%s", T(S_UPDATE), upd ? "!" : "");
+  gfx->setCursor(NET_PILL_X2 + (NET_PILL_W - (int)strlen(ul) * 12) / 2, NET_PILL_Y + 8);
+  gfx->print(ul);
+
   char petLine[32];
   if (pet.isEgg()) snprintf(petLine, sizeof(petLine), "%s", T(S_EGG_HDR));
   else {
@@ -3768,7 +3813,16 @@ void renderClock() {
     snprintf(level, sizeof(level), T(S_LEVEL_SHORT_FMT), pet.level());
     snprintf(petLine, sizeof(petLine), "#%d %s", pet.speciesId, level);
   }
-  drawStatusLine(390, "PET", petLine, UI_INK);
+  char st1[64], st2[64];
+  snprintf(st1, sizeof(st1), "FW v%s  SAVE %s", FW_VERSION, pet.saveLoadedFromNvs ? T(S_OK) : T(S_STATUS_NEW));
+  snprintf(st2, sizeof(st2), "SD %s  SPR %s  PET %s", sdReady ? "OK" : "NO",
+           (pmd.loaded || mon.loaded) ? T(S_OK) : T(S_STATUS_FLASH_NO), petLine);
+  gfx->setTextSize(1);
+  gfx->setTextColor(UI_INK);
+  gfx->setCursor(CX - (int)strlen(st1) * 3, 374);
+  gfx->print(st1);
+  gfx->setCursor(CX - (int)strlen(st2) * 3, 388);
+  gfx->print(st2);
 
   gfx->fillRoundRect(96, 404, 110, 40, 13, UI_WHITE);
   gfx->drawRoundRect(96, 404, 110, 40, 13, UI_INK);
@@ -3815,8 +3869,494 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
+  if (y >= NET_PILL_Y && y < NET_PILL_Y + NET_PILL_H) {
+    if (x >= NET_PILL_X1 && x < NET_PILL_X1 + NET_PILL_W) { openNet(NETP_WIFI); return; }
+    if (x >= NET_PILL_X2 && x < NET_PILL_X2 + NET_PILL_W) { openNet(NETP_UPDATE); return; }
+  }
   if (y >= 404 && y <= 444 && x >= 96 && x <= 206) { openHelp(); return; }
   if (y >= 404 && y <= 444 && x >= 230 && x <= 386) { applyClock(); return; }
+}
+
+// ---------- Wi-Fi y actualizaciones (desde la pantalla de ajustes) ----------
+// netOpen es una capa sobre clockOpen: al cerrar se vuelve a los ajustes y todas
+// las comprobaciones de "pantalla de ajustes abierta" siguen valiendo.
+
+#define NET_DIM 0x8410
+#define NET_ROWS_SAVED 5
+#define NET_ROWS_SCAN 6
+
+static const char *const PW_KEYS[3][4] = {
+  { "1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm._@" },
+  { "1234567890", "QWERTYUIOP", "ASDFGHJKL-", "ZXCVBNM._@" },
+  { "!\"#$%&'()*", "+,-./:;<=>", "?@[\\]^_`{|", "}~        " },
+};
+#define PW_X 33
+#define PW_Y 132
+#define PW_KW 40
+#define PW_KH 46
+#define PW_BOT_Y 322
+#define PW_BOT_H 44
+
+static bool inBox(int16_t x, int16_t y, int bx, int by, int bw, int bh) {
+  return x >= bx && x < bx + bw && y >= by && y < by + bh;
+}
+
+static void netPill(int x, int y, int w, int h, const char *label, uint16_t fill, uint16_t ink, uint8_t size) {
+  gfx->fillRoundRect(x, y, w, h, 10, fill);
+  gfx->drawRoundRect(x, y, w, h, 10, UI_INK);
+  gfx->setTextSize(size);
+  gfx->setTextColor(ink);
+  int cw = 6 * size;
+  int maxc = (w - 6) / cw;
+  char buf[48];
+  snprintf(buf, sizeof(buf), "%.*s", maxc, label);
+  gfx->setCursor(x + (w - (int)strlen(buf) * cw) / 2, y + (h - 8 * size) / 2 + 1);
+  gfx->print(buf);
+}
+
+// texto centrado, recortado a maxW pixeles
+static void netText(int y, const char *s, uint16_t col, uint8_t size, int maxW = 360) {
+  int cw = 6 * size;
+  char buf[64];
+  snprintf(buf, sizeof(buf), "%.*s", maxW / cw, s);
+  gfx->setTextSize(size);
+  gfx->setTextColor(col);
+  gfx->setCursor(CX - (int)strlen(buf) * cw / 2, y);
+  gfx->print(buf);
+}
+
+static void netBars(int x, int y, int8_t rssi, uint16_t col) {
+  int bars = rssi > -55 ? 4 : rssi > -67 ? 3 : rssi > -78 ? 2 : 1;
+  for (int i = 0; i < 4; i++) {
+    int h = 5 + i * 4;
+    if (i < bars) gfx->fillRect(x + i * 7, y + 18 - h, 5, h, col);
+    else gfx->drawRect(x + i * 7, y + 18 - h, 5, h, UI_TRACK);
+  }
+}
+
+void openNet(uint8_t page) {
+  netOpen = true;
+  netPage = page;
+  netDirty = true;
+  netForgetIdx = -1;
+  netListPage = 0;
+  netScanPage = 0;
+  lockTouchBrief();
+  sfxPlay(SFX_MENU);
+  if (page == NETP_UPDATE && !netBusy() && netSaved().count) {
+    OtaStatus s = otaStatus();
+    if (s == OTA_IDLE || s == OTA_ERROR || s == OTA_UP_TO_DATE || s == OTA_SPRITES_DONE) otaStartCheck(true);
+  }
+}
+
+void closeNet() {
+  OtaStatus s = otaStatus();
+  if (s == OTA_SPRITES || s == OTA_FIRMWARE || s == OTA_REBOOT) return;  // no salir a medias
+  if (netPage == NETP_PASS || netPage == NETP_SCAN) {  // volver a la lista de redes
+    memset(pwBuf, 0, sizeof(pwBuf));
+    pwLen = 0;
+    netPage = NETP_WIFI;
+    netDirty = true;
+    lockTouchBrief();
+    sfxPlay(SFX_TAP);
+    return;
+  }
+  netOpen = false;
+  netClearJoin();
+  clockDirty = true;
+  lockTouchBrief();
+  sfxPlay(SFX_TAP);
+}
+
+void openPassword(const char *ssid) {
+  snprintf(pwSsid, sizeof(pwSsid), "%s", ssid);
+  memset(pwBuf, 0, sizeof(pwBuf));
+  int idx = netListFind(netSaved(), ssid);
+  if (idx >= 0) snprintf(pwBuf, sizeof(pwBuf), "%s", netSaved().e[idx].pass);
+  pwLen = strlen(pwBuf);
+  pwMode = 0;
+  netPage = NETP_PASS;
+  netDirty = true;
+  lockTouchBrief();
+  sfxPlay(SFX_MENU);
+}
+
+static void renderNetWifi() {
+  netText(30, T(S_WIFI), UI_INK, 3);
+  const NetList &l = netSaved();
+  char line[48];
+  uint16_t col = UI_INK;
+  switch (netJoinStatus()) {
+    case JOIN_BUSY: snprintf(line, sizeof(line), "%s", T(S_NET_CONNECTING)); col = UI_BAR_WARN; break;
+    case JOIN_OK: snprintf(line, sizeof(line), "%s", T(S_NET_JOIN_OK)); col = UI_BAR_OK; break;
+    case JOIN_WRONG_PASS: snprintf(line, sizeof(line), "%s", T(S_NET_WRONG_PASS)); col = UI_BAR_BAD; break;
+    case JOIN_NOT_FOUND: snprintf(line, sizeof(line), "%s", T(S_NET_JOIN_NOTFOUND)); col = UI_BAR_BAD; break;
+    case JOIN_FAILED: snprintf(line, sizeof(line), "%s", T(S_NET_JOIN_FAIL)); col = UI_BAR_BAD; break;
+    default: snprintf(line, sizeof(line), T(S_NET_SAVED_FMT), (unsigned)l.count, (unsigned)NET_MAX); break;
+  }
+  netText(70, line, col, 2);
+
+  bool on = netAutoCheck();
+  netPill(66, 98, 160, 34, on ? T(S_NET_AUTO_ON) : T(S_NET_AUTO_OFF), on ? UI_BAR_OK : UI_WHITE, on ? UI_BG_DAY : UI_INK, 2);
+  netPill(240, 98, 160, 34, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
+  netText(140, T(S_NET_AUTO_HINT), NET_DIM, 1);
+
+  int order[NET_MAX];
+  int n = netListOrder(l, order);
+  if (!n) {
+    netText(210, T(S_NET_NONE), UI_INK, 2);
+    netText(240, T(S_NET_TAP_SEARCH), NET_DIM, 1);
+  }
+  int pages = (n + NET_ROWS_SAVED - 1) / NET_ROWS_SAVED;
+  if (netListPage >= pages) netListPage = pages ? pages - 1 : 0;
+  for (int r = 0; r < NET_ROWS_SAVED; r++) {
+    int k = netListPage * NET_ROWS_SAVED + r;
+    if (k >= n) break;
+    int idx = order[k];
+    int y = 158 + r * 42;
+    bool pending = netForgetIdx == idx;
+    gfx->fillRoundRect(58, y, 350, 38, 9, UI_WHITE);
+    gfx->drawRoundRect(58, y, 350, 38, 9, pending ? UI_BAR_BAD : UI_INK);
+    gfx->setTextSize(2);
+    gfx->setTextColor(pending ? UI_BAR_BAD : (k == 0 ? UI_BAR_OK : UI_INK));
+    gfx->setCursor(70, y + 11);
+    char s[24];
+    snprintf(s, sizeof(s), "%.22s", pending ? T(S_NET_FORGET_Q) : l.e[idx].ssid);
+    gfx->print(s);
+    gfx->fillRoundRect(362, y + 4, 40, 30, 8, pending ? UI_BAR_BAD : UI_TRACK);
+    gfx->setTextColor(pending ? UI_WHITE : UI_INK);
+    gfx->setCursor(376, y + 11);
+    gfx->print("X");
+  }
+  if (pages > 1) {
+    netPill(90, 370, 50, 28, "<", netListPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
+    netPill(326, 370, 50, 28, ">", netListPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
+    char pg[12];
+    snprintf(pg, sizeof(pg), "%u/%u", (unsigned)(netListPage + 1), (unsigned)pages);
+    netText(377, pg, UI_INK, 2);
+  }
+  netPill(163, 404, 140, 40, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
+}
+
+static void netWifiTap(int16_t x, int16_t y) {
+  if (inBox(x, y, 163, 404, 140, 40)) { closeNet(); return; }
+  if (inBox(x, y, 66, 98, 160, 34)) {
+    netSetAutoCheck(!netAutoCheck());
+    sfxPlay(SFX_TAP);
+    return;
+  }
+  if (inBox(x, y, 240, 98, 160, 34)) {
+    if (netBusy()) { sfxPlay(SFX_DENY); return; }
+    netClearJoin();
+    netPage = NETP_SCAN;
+    netScanPage = 0;
+    netDirty = true;
+    netStartScan();
+    sfxPlay(SFX_MENU);
+    return;
+  }
+  const NetList &l = netSaved();
+  int order[NET_MAX];
+  int n = netListOrder(l, order);
+  int pages = (n + NET_ROWS_SAVED - 1) / NET_ROWS_SAVED;
+  if (pages > 1 && y >= 370 && y < 398) {
+    if (x >= 90 && x < 140 && netListPage > 0) { netListPage--; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
+    if (x >= 326 && x < 376 && netListPage + 1 < pages) { netListPage++; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
+    return;
+  }
+  for (int r = 0; r < NET_ROWS_SAVED; r++) {
+    int k = netListPage * NET_ROWS_SAVED + r;
+    if (k >= n) break;
+    int idx = order[k];
+    int ry = 158 + r * 42;
+    if (!inBox(x, y, 58, ry, 350, 38)) continue;
+    if (netBusy()) { sfxPlay(SFX_DENY); return; }
+    if (x >= 352) {  // X: primer toque pide confirmacion, el segundo borra
+      if (netForgetIdx == idx) {
+        netForget(idx);
+        netForgetIdx = -1;
+        sfxPlay(SFX_TAP);
+      } else {
+        netForgetIdx = idx;
+        sfxPlay(SFX_DENY);
+      }
+      netDirty = true;
+      return;
+    }
+    netForgetIdx = -1;
+    openPassword(l.e[idx].ssid);  // cambiar la contrasena guardada
+    return;
+  }
+  if (netForgetIdx >= 0) { netForgetIdx = -1; netDirty = true; }
+}
+
+static void renderNetScan() {
+  netText(30, T(S_NET_NETWORKS), UI_INK, 3);
+  NetScanStatus st = netScanStatus();
+  int n = netScanCount();
+  if (st == SCAN_BUSY) netText(66, T(S_NET_SCANNING), UI_BAR_WARN, 2);
+  else if (n == 0) netText(66, T(S_NET_NOTFOUND), UI_BAR_BAD, 2);
+  int pages = (n + NET_ROWS_SCAN - 1) / NET_ROWS_SCAN;
+  if (netScanPage >= pages) netScanPage = pages ? pages - 1 : 0;
+  if (st != SCAN_BUSY) {
+    for (int r = 0; r < NET_ROWS_SCAN; r++) {
+      int k = netScanPage * NET_ROWS_SCAN + r;
+      if (k >= n) break;
+      const NetScanItem &it = netScanItem(k);
+      int y = 94 + r * 42;
+      gfx->fillRoundRect(58, y, 350, 38, 9, UI_WHITE);
+      gfx->drawRoundRect(58, y, 350, 38, 9, UI_INK);
+      gfx->setTextSize(2);
+      gfx->setTextColor(it.saved ? UI_BAR_OK : UI_INK);
+      gfx->setCursor(68, y + 11);
+      char s[24];
+      snprintf(s, sizeof(s), "%.20s", it.ssid);
+      gfx->print(s);
+      if (it.open) {  // red abierta: sin contrasena
+        gfx->setTextSize(1);
+        gfx->setTextColor(NET_DIM);
+        gfx->setCursor(320, y + 15);
+        gfx->print("OPEN");
+      }
+      netBars(372, y + 9, it.rssi, it.saved ? UI_BAR_OK : UI_INK);
+    }
+  }
+  netPill(80, 354, 56, 34, "<", netScanPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
+  netPill(156, 354, 154, 34, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
+  netPill(330, 354, 56, 34, ">", netScanPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
+  netPill(163, 404, 140, 40, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
+}
+
+static void netScanTap(int16_t x, int16_t y) {
+  if (inBox(x, y, 163, 404, 140, 40)) { closeNet(); return; }
+  int n = netScanCount();
+  int pages = (n + NET_ROWS_SCAN - 1) / NET_ROWS_SCAN;
+  if (y >= 354 && y < 388) {
+    if (x >= 80 && x < 136 && netScanPage > 0) { netScanPage--; netDirty = true; sfxPlay(SFX_MENU); }
+    else if (x >= 330 && x < 386 && netScanPage + 1 < pages) { netScanPage++; netDirty = true; sfxPlay(SFX_MENU); }
+    else if (x >= 156 && x < 310) {
+      if (netStartScan()) { netScanPage = 0; sfxPlay(SFX_MENU); }
+      else sfxPlay(SFX_DENY);
+    }
+    return;
+  }
+  if (netScanStatus() == SCAN_BUSY || netBusy()) return;
+  for (int r = 0; r < NET_ROWS_SCAN; r++) {
+    int k = netScanPage * NET_ROWS_SCAN + r;
+    if (k >= n) break;
+    if (!inBox(x, y, 58, 94 + r * 42, 350, 38)) continue;
+    const NetScanItem &it = netScanItem(k);
+    if (it.open) {  // sin contrasena: probar directamente
+      netStartJoin(it.ssid, "");
+      netPage = NETP_WIFI;
+      netDirty = true;
+      sfxPlay(SFX_MENU);
+    } else {
+      openPassword(it.ssid);
+    }
+    return;
+  }
+}
+
+static void renderNetPass() {
+  netText(34, pwSsid, UI_INK, 2);
+  netText(62, T(S_NET_PASSWORD), NET_DIM, 1);
+  gfx->fillRoundRect(63, 78, 340, 42, 9, UI_WHITE);
+  gfx->drawRoundRect(63, 78, 340, 42, 9, UI_INK);
+  gfx->setTextSize(2);
+  gfx->setTextColor(UI_INK);
+  gfx->setCursor(73, 91);
+  const char *shown = pwLen > 25 ? pwBuf + (pwLen - 25) : pwBuf;  // se ve el final
+  gfx->print(shown);
+  gfx->print("_");
+
+  for (int r = 0; r < 4; r++) {
+    const char *row = PW_KEYS[pwMode][r];
+    for (int c = 0; c < 10; c++) {
+      char ch = row[c];
+      int x = PW_X + c * PW_KW, y = PW_Y + r * PW_KH;
+      if (ch == ' ') continue;
+      gfx->fillRoundRect(x + 2, y + 2, PW_KW - 4, PW_KH - 4, 6, UI_WHITE);
+      gfx->drawRoundRect(x + 2, y + 2, PW_KW - 4, PW_KH - 4, 6, UI_INK);
+      gfx->setTextSize(2);
+      gfx->setTextColor(UI_INK);
+      gfx->setCursor(x + PW_KW / 2 - 5, y + PW_KH / 2 - 7);
+      gfx->print(ch);
+    }
+  }
+  netPill(53, PW_BOT_Y, 60, PW_BOT_H, pwMode == 1 ? "abc" : "ABC", pwMode == 1 ? UI_BAR_WARN : UI_WHITE, UI_INK, 2);
+  netPill(117, PW_BOT_Y, 60, PW_BOT_H, pwMode == 2 ? "abc" : "#+=", pwMode == 2 ? UI_BAR_WARN : UI_WHITE, UI_INK, 2);
+  netPill(181, PW_BOT_Y, 104, PW_BOT_H, "___", UI_WHITE, UI_INK, 2);
+  netPill(289, PW_BOT_Y, 60, PW_BOT_H, "<-", UI_BAR_WARN, UI_INK, 2);
+  netPill(353, PW_BOT_Y, 60, PW_BOT_H, "OK", UI_BAR_OK, UI_BG_DAY, 2);
+  netPill(173, 378, 120, 40, "X", UI_TRACK, UI_INK, 2);
+}
+
+static void netPassTap(int16_t x, int16_t y) {
+  if (inBox(x, y, 173, 378, 120, 40)) { closeNet(); return; }
+  if (y >= PW_Y && y < PW_Y + 4 * PW_KH && x >= PW_X && x < PW_X + 10 * PW_KW) {
+    char ch = PW_KEYS[pwMode][(y - PW_Y) / PW_KH][(x - PW_X) / PW_KW];
+    if (ch == ' ') return;
+    if (pwLen < NET_PASS_LEN) {
+      pwBuf[pwLen++] = ch;
+      pwBuf[pwLen] = 0;
+      sfxPlay(SFX_TAP);
+    } else {
+      sfxPlay(SFX_DENY);
+    }
+    netDirty = true;
+    return;
+  }
+  if (y < PW_BOT_Y || y >= PW_BOT_Y + PW_BOT_H) return;
+  if (x >= 53 && x < 113) { pwMode = pwMode == 1 ? 0 : 1; netDirty = true; sfxPlay(SFX_TAP); }
+  else if (x >= 117 && x < 177) { pwMode = pwMode == 2 ? 0 : 2; netDirty = true; sfxPlay(SFX_TAP); }
+  else if (x >= 181 && x < 285) {
+    if (pwLen < NET_PASS_LEN) { pwBuf[pwLen++] = ' '; pwBuf[pwLen] = 0; }
+    netDirty = true;
+    sfxPlay(SFX_TAP);
+  } else if (x >= 289 && x < 349) {
+    if (pwLen) pwBuf[--pwLen] = 0;
+    netDirty = true;
+    sfxPlay(SFX_TAP);
+  } else if (x >= 353 && x < 413) {
+    // WPA pide al menos 8 caracteres; una red abierta va sin contrasena
+    if ((pwLen && pwLen < 8) || !netStartJoin(pwSsid, pwBuf)) { sfxPlay(SFX_DENY); return; }
+    memset(pwBuf, 0, sizeof(pwBuf));
+    pwLen = 0;
+    netPage = NETP_WIFI;
+    netListPage = 0;
+    netDirty = true;
+    lockTouchBrief();
+    sfxPlay(SFX_MENU);
+  }
+}
+
+static StrId otaErrorText(OtaError e) {
+  switch (e) {
+    case OTA_ERR_NO_NETWORK: return S_UPD_ERR_NONET;
+    case OTA_ERR_NO_RELEASE: return S_UPD_ERR_NOREL;
+    case OTA_ERR_BAD_FILE: return S_UPD_ERR_BAD;
+    case OTA_ERR_SD: return S_UPD_ERR_SD;
+    case OTA_ERR_SD_FULL: return S_UPD_ERR_SDFULL;
+    case OTA_ERR_FLASH: return S_UPD_ERR_FLASH;
+    default: return S_UPD_ERR_DOWNLOAD;
+  }
+}
+
+// boton principal de la pagina de actualizacion: 0 ninguno, 1 buscar, 2 instalar, 3 abrir Wi-Fi
+static uint8_t netUpdateAction() {
+  if (netBusy()) return 0;
+  OtaStatus s = otaStatus();
+  if (s == OTA_REBOOT) return 0;
+  if (!netSaved().count) return 3;
+  if (s == OTA_AVAILABLE) return 2;
+  return 1;
+}
+
+static void renderNetUpdate() {
+  netText(36, T(S_UPDATE), UI_INK, 3);
+  char line[64];
+  snprintf(line, sizeof(line), T(S_UPD_CURRENT_FMT), FW_VERSION);
+  netText(88, line, UI_INK, 2);
+  if (otaLatest()[0]) {
+    snprintf(line, sizeof(line), T(S_UPD_LATEST_FMT), otaLatest());
+    netText(114, line, otaUpdateAvailable() ? UI_BAR_WARN : UI_INK, 2);
+  }
+  if (otaUpdateAvailable()) {
+    const char *what = otaFirmwareNewer() && otaSpritesNeeded() ? "Firmware + Sprites"
+                       : otaSpritesNeeded() ? "Sprites" : "Firmware";
+    netText(140, what, NET_DIM, 1);
+  }
+
+  OtaStatus s = otaStatus();
+  uint16_t col = UI_INK;
+  line[0] = 0;
+  switch (s) {
+    case OTA_IDLE: if (!netSaved().count) { snprintf(line, sizeof(line), "%s", T(S_UPD_NEED_WIFI)); col = UI_BAR_WARN; } break;
+    case OTA_CONNECTING: snprintf(line, sizeof(line), "%s", T(S_NET_CONNECTING)); col = UI_BAR_WARN; break;
+    case OTA_CHECKING: snprintf(line, sizeof(line), "%s", T(S_UPD_CHECKING)); col = UI_BAR_WARN; break;
+    case OTA_UP_TO_DATE: snprintf(line, sizeof(line), "%s", T(S_UPD_UPTODATE)); col = UI_BAR_OK; break;
+    case OTA_AVAILABLE: snprintf(line, sizeof(line), "%s", T(S_UPD_AVAILABLE)); col = UI_BAR_WARN; break;
+    case OTA_SPRITES: snprintf(line, sizeof(line), "Sprites %u%%", (unsigned)otaProgress()); col = UI_BAR_WARN; break;
+    case OTA_FIRMWARE: snprintf(line, sizeof(line), "Firmware %u%%", (unsigned)otaProgress()); col = UI_BAR_WARN; break;
+    case OTA_SPRITES_DONE: snprintf(line, sizeof(line), "%s", T(S_UPD_SPR_DONE)); col = UI_BAR_OK; break;
+    case OTA_REBOOT: snprintf(line, sizeof(line), "%s", T(S_UPD_RESTARTING)); col = UI_BAR_OK; break;
+    case OTA_ERROR: snprintf(line, sizeof(line), "%s", T(otaErrorText(otaError()))); col = UI_BAR_BAD; break;
+  }
+  if (line[0]) netText(178, line, col, 2);
+  if (s == OTA_SPRITES || s == OTA_FIRMWARE) {
+    gfx->fillRoundRect(83, 210, 300, 18, 8, UI_TRACK);
+    gfx->fillRoundRect(83, 210, 3 * otaProgress() < 16 ? 16 : 3 * otaProgress(), 18, 8, UI_BAR_OK);
+    netText(240, T(S_UPD_KEEP_ON), NET_DIM, 1);
+  }
+  uint8_t a = netUpdateAction();
+  if (a == 1) netPill(123, 280, 220, 48, T(S_UPD_CHECK), UI_WHITE, UI_INK, 2);
+  else if (a == 2) netPill(123, 280, 220, 48, T(S_UPD_INSTALL), UI_BAR_OK, UI_BG_DAY, 2);
+  else if (a == 3) netPill(123, 280, 220, 48, T(S_WIFI), UI_BAR_WARN, UI_INK, 2);
+  if (s != OTA_SPRITES && s != OTA_FIRMWARE && s != OTA_REBOOT)
+    netPill(163, 404, 140, 40, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
+}
+
+static void netUpdateTap(int16_t x, int16_t y) {
+  if (inBox(x, y, 163, 404, 140, 40)) { closeNet(); return; }
+  if (!inBox(x, y, 123, 280, 220, 48)) return;
+  switch (netUpdateAction()) {
+    case 1: if (otaStartCheck(true)) sfxPlay(SFX_MENU); break;
+    case 2: if (otaStartInstall()) sfxPlay(SFX_LEVEL); break;
+    case 3: netPage = NETP_WIFI; netDirty = true; sfxPlay(SFX_MENU); break;
+    default: break;
+  }
+}
+
+void renderNet() {
+  netDirty = false;
+  netSeenGen = netGen();
+  gfx->fillScreen(UI_BG_DAY);
+  switch (netPage) {
+    case NETP_SCAN: renderNetScan(); break;
+    case NETP_PASS: renderNetPass(); break;
+    case NETP_UPDATE: renderNetUpdate(); break;
+    default: renderNetWifi(); break;
+  }
+  flushStampedFrame();
+}
+
+void netTap(int16_t x, int16_t y) {
+  switch (netPage) {
+    case NETP_SCAN: netScanTap(x, y); break;
+    case NETP_PASS: netPassTap(x, y); break;
+    case NETP_UPDATE: netUpdateTap(x, y); break;
+    default: netWifiTap(x, y); break;
+  }
+}
+
+// en cada vuelta del loop: aviso, recarga de sprites y reinicio tras instalar
+void netService(uint32_t now) {
+  netLoop(now);
+  if (netOpen && netGen() != netSeenGen) netDirty = true;
+  if (otaTakeNotice()) {
+    snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_UPD_NOTICE));
+    petEventFeedbackUntil = now + 5000;
+    clockDirty = true;
+    if (audioEnabled()) sfxPlay(SFX_MEDAL);
+  }
+  if (otaTakeSpritesChanged()) {
+    thumbs.unload();
+    thumbs.load();
+    sdDirty = true;  // ensureMon recarga el sprite del bicho
+  }
+  static uint32_t rebootAt = 0;
+  if (otaStatus() == OTA_REBOOT) {
+    if (!rebootAt) rebootAt = now + 2500;
+    else if ((int32_t)(now - rebootAt) >= 0) {
+      uint32_t e = rtcEpoch();
+      if (e) pet.lastSeenEpoch = e;
+      pet.flushSave();
+      Serial.println("OTA restart");
+      delay(200);
+      ESP.restart();
+    }
+  }
 }
 
 // llama + numero de racha arriba a la izquierda
