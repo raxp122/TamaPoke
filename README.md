@@ -82,6 +82,31 @@ species' level and at least three of those four values strictly above 40.
 Evolution, farewell, release and runaway are always shown as decisions and do
 not complete unseen in the background.
 
+## Wi-Fi and over-the-air updates
+
+Swipe down to open the settings, then:
+
+- **WI-FI**: search for networks, tap one and type the password on the on-screen
+  keyboard (`ABC` upper case, `#+=` symbols). Up to **10 networks** are remembered
+  (home, work, phone hotspot…); when the list is full the one used least recently
+  is replaced. Tap a saved network to change its password, `X` twice to forget it.
+- **UPDATE**: checks GitHub for a newer release and installs it. The device
+  downloads the firmware and, only when they changed, the sprites for the microSD
+  (about 105 MB, a few minutes). The save game is kept. If the new firmware does
+  not start correctly, the bootloader goes back to the previous one.
+- **AUTO ON/OFF** (on the Wi-Fi page): with AUTO on, the device connects to the
+  strongest saved network at start-up (and every 12 hours), checks for an update
+  and switches the radio off again. A new version shows a short notice and an
+  orange `UPDATE!` button in the settings.
+
+Every merge into `main` builds and publishes a release automatically
+(`.github/workflows/release.yml`, version `1.37.<build>`).
+
+**First installation** of a firmware with OTA support has to be done once over
+USB, without erasing the flash: from the release write
+`tamapoke-bootloader.bin` at `0x0`, `tamapoke-partitions.bin` at `0x8000`,
+`tamapoke-boot_app0.bin` at `0xe000` and `tamapoke-app.bin` at `0x10000`.
+
 ## Hardware
 
 - Waveshare ESP32-S3-Touch-AMOLED-1.75 Standard or `-G`

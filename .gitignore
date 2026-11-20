@@ -23,3 +23,6 @@ web/firmware/tamapoke-*.bin
 
 # Local GitHub login leftover; never commit.
 .gh-auth/
+
+# Written by the release workflow (FW_VERSION 1.37.<build>); never commit.
+version_ci.h

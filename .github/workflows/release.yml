@@ -1,0 +1,143 @@
+name: Build and release
+
+# Builds the firmware on every push and pull request.
+# A push to main (every merged PR) also publishes a GitHub release: the device
+# downloads its OTA updates from there (Settings > UPDATE).
+#   version.json          version, sizes and SHA-256 of the two files below
+#   tamapoke-app.bin      firmware for the free OTA slot
+#   tamapoke-sprites.pak  complete sprite set for the microSD (only downloaded when it changed)
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # only needed to publish the release from main
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FQBN: "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
+  ESP32_CORE: "3.3.10"
+  ESP32_INDEX: "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Version number
+        id: ver
+        run: |
+          v="1.37.${{ github.run_number }}"
+          echo "#define FW_VERSION \"$v\"" > version_ci.h
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+          echo "Firmware version: $v"
+
+      - name: Native tests
+        run: |
+          cd tests
+          make CXX=clang++ clean test
+
+      - name: Set up arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Cache Arduino core and libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: arduino-esp32-${{ env.ESP32_CORE }}-gfx167-sensor041-xpowers033
+
+      - name: Install ESP32 core and libraries
+        run: |
+          arduino-cli core update-index --additional-urls "$ESP32_INDEX"
+          arduino-cli core install "esp32:esp32@$ESP32_CORE" --additional-urls "$ESP32_INDEX"
+          arduino-cli lib install "GFX Library for Arduino@1.6.7" "SensorLib@0.4.1" "XPowersLib@0.3.3"
+
+      - name: Compile (public Gen-3 build)
+        run: |
+          arduino-cli compile --fqbn "$FQBN" \
+            --build-property compiler.cpp.extra_flags=-DTAMAPOKE_GEN3_RELEASE \
+            --build-path build .
+          # debug commands only exist in the local test build
+          if strings build/TamaPoke.ino.bin | grep -Eq 'TESTMON|TESTEVO'; then
+            echo "Debug command strings found in the release firmware" >&2
+            exit 1
+          fi
+          grep -q "${{ steps.ver.outputs.v }}" <(strings build/TamaPoke.ino.bin)
+
+      - name: Sprite pack and version.json
+        run: |
+          mkdir -p dist
+          cp build/TamaPoke.ino.bin dist/tamapoke-app.bin
+          cp build/TamaPoke.ino.bootloader.bin dist/tamapoke-bootloader.bin
+          cp build/TamaPoke.ino.partitions.bin dist/tamapoke-partitions.bin
+          cp build/boot_app0.bin dist/tamapoke-boot_app0.bin
+          # complete set #1-386 + thumbs.bin, the same files as sprites.pak + sprites-gen3-update.pak
+          python3 tools/pack_bundle.py --gen3-full --output dist/tamapoke-sprites.pak
+          python3 tools/validate_web_build.py --pak dist/tamapoke-sprites.pak --expected-files 773 --expected-thumbs 386
+          python3 - "${{ steps.ver.outputs.v }}" <<'EOF'
+          import hashlib, json, os, sys
+          def sha(p):
+              h = hashlib.sha256()
+              with open(p, 'rb') as f:
+                  for chunk in iter(lambda: f.read(1 << 20), b''):
+                      h.update(chunk)
+              return h.hexdigest()
+          app, pak = 'dist/tamapoke-app.bin', 'dist/tamapoke-sprites.pak'
+          manifest = {
+              'version': sys.argv[1],
+              'app_size': os.path.getsize(app),
+              'app_sha256': sha(app),
+              'sprites_size': os.path.getsize(pak),
+              'sprites_sha256': sha(pak),
+          }
+          json.dump(manifest, open('dist/version.json', 'w'), indent=2)
+          print(json.dumps(manifest, indent=2))
+          EOF
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: tamapoke-${{ steps.ver.outputs.v }}
+          if-no-files-found: error
+          path: |
+            dist/version.json
+            dist/tamapoke-app.bin
+            dist/tamapoke-bootloader.bin
+            dist/tamapoke-partitions.bin
+            dist/tamapoke-boot_app0.bin
+
+      - name: Publish release (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: TamaPoke ${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: "true"
+          body: |
+            Firmware ${{ steps.ver.outputs.v }}.
+
+            **On the device (OTA):** Settings (swipe down) > UPDATE > INSTALL.
+            The device downloads the firmware and, only when they changed, the sprites for the microSD.
+            The save game stays where it is.
+
+            **First installation over USB** (only once, from a firmware without OTA):
+            write the four files at these addresses, **without erasing the flash**:
+            `tamapoke-bootloader.bin` 0x0, `tamapoke-partitions.bin` 0x8000,
+            `tamapoke-boot_app0.bin` 0xe000, `tamapoke-app.bin` 0x10000.
+          files: |
+            dist/version.json
+            dist/tamapoke-app.bin
+            dist/tamapoke-sprites.pak
+            dist/tamapoke-bootloader.bin
+            dist/tamapoke-partitions.bin
+            dist/tamapoke-boot_app0.bin
