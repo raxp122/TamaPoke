@@ -29,7 +29,8 @@ swipe 380 233 90 233
 shot 27_card_expedition
 swipe 380 233 90 233
 shot 28_card_steps
-swipe 233 380 233 120
+pwr                  # back to the main screen
+shot 29_back_main
 # --- settings
 swipe 233 100 233 380
 shot 30_settings
@@ -39,20 +40,27 @@ tap 320 115
 shot 32_wifi_scan
 tap 233 155
 shot 33_wifi_password
-tap 233 398
-tap 233 424
+pwr                  # password -> Wi-Fi page
+pwr                  # Wi-Fi page -> settings
 tap 311 350
 ota available
 shot 34_update
-tap 233 424
+pwr
 tap 150 424
 shot 35_help
 tap 380 233
 shot 36_help_2
-tap 233 420
-swipe 233 100 233 380
+pwr                  # help -> settings
+pwr                  # settings -> main
 # --- pokedex
 swipe 90 233 380 233
 shot 40_pokedex
 tap 150 150
 shot 41_pokedex_detail
+pwr                  # detail -> grid
+pwr                  # grid -> main
+shot 42_back_main
+pwr                  # main: locks the screen
+shot 43_locked
+pwr                  # wakes up
+shot 44_awake
