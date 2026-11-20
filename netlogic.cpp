@@ -320,3 +320,93 @@ bool TpakParser::feed(const uint8_t *data, size_t len) {
   }
   return st != ERROR && st != STOPPED;
 }
+
+// ---------------------------------------------------------------------------
+// Time zones
+// ---------------------------------------------------------------------------
+
+const TzZone TZ_ZONES[] = {
+  { "OFF", 0, TZDST_NONE },
+  { "UTC+0 UK/PT", 0, TZDST_EU },
+  { "UTC+1 CET", 60, TZDST_EU },
+  { "UTC+2 EET", 120, TZDST_EU },
+  { "UTC+3 MSK/TR", 180, TZDST_NONE },
+  { "UTC", 0, TZDST_NONE },
+  { "UTC-3 BR/AR", -180, TZDST_NONE },
+  { "UTC-5 US EAST", -300, TZDST_US },
+  { "UTC-6 US CENT", -360, TZDST_US },
+  { "UTC-7 US MOUNT", -420, TZDST_US },
+  { "UTC-8 US PACIF", -480, TZDST_US },
+  { "UTC+4 DUBAI", 240, TZDST_NONE },
+  { "UTC+5:30 INDIA", 330, TZDST_NONE },
+  { "UTC+7 BANGKOK", 420, TZDST_NONE },
+  { "UTC+8 CN/SG", 480, TZDST_NONE },
+  { "UTC+9 JP/KR", 540, TZDST_NONE },
+  { "UTC+10 SYDNEY", 600, TZDST_AU },
+};
+const uint8_t TZ_COUNT = sizeof(TZ_ZONES) / sizeof(TZ_ZONES[0]);
+
+// days since 1970-01-01 for a civil date (Howard Hinnant's algorithm)
+static int32_t daysFromCivil(int32_t y, uint32_t m, uint32_t d) {
+  y -= m <= 2;
+  int32_t era = (y >= 0 ? y : y - 399) / 400;
+  uint32_t yoe = (uint32_t)(y - era * 400);
+  uint32_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  uint32_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + (int32_t)doe - 719468;
+}
+
+static int32_t yearOf(uint32_t epoch) {
+  int32_t z = (int32_t)(epoch / 86400) + 719468;
+  int32_t era = (z >= 0 ? z : z - 146096) / 146097;
+  uint32_t doe = (uint32_t)(z - era * 146097);
+  uint32_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  uint32_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  uint32_t mp = (5 * doy + 2) / 153;
+  uint32_t m = mp < 10 ? mp + 3 : mp - 9;
+  return (int32_t)yoe + era * 400 + (m <= 2);
+}
+
+// n-th (1..5, 5 = last) Sunday of a month, as days since 1970
+static int32_t nthSunday(int32_t y, uint32_t m, int n) {
+  int32_t first = daysFromCivil(y, m, 1);
+  int32_t wd = (first + 4) % 7;  // 1970-01-01 was a Thursday; 0 = Sunday
+  if (wd < 0) wd += 7;
+  int32_t sunday = first + (7 - wd) % 7 + (n - 1) * 7;
+  if (n == 5) {
+    int32_t next = daysFromCivil(m == 12 ? y + 1 : y, m == 12 ? 1 : m + 1, 1);
+    while (sunday >= next) sunday -= 7;
+  }
+  return sunday;
+}
+
+int32_t tzOffsetSeconds(uint8_t zone, uint32_t utc) {
+  if (zone == TZ_OFF || zone >= TZ_COUNT) return 0;
+  const TzZone &z = TZ_ZONES[zone];
+  int32_t std = z.stdOffsetMin * 60;
+  int32_t y = yearOf(utc);
+  int64_t t = utc;
+  bool dst = false;
+  switch (z.dst) {
+    case TZDST_EU: {  // last Sunday of March 01:00 UTC to last Sunday of October 01:00 UTC
+      int64_t a = (int64_t)nthSunday(y, 3, 5) * 86400 + 3600;
+      int64_t b = (int64_t)nthSunday(y, 10, 5) * 86400 + 3600;
+      dst = t >= a && t < b;
+      break;
+    }
+    case TZDST_US: {  // second Sunday of March 02:00 local to first Sunday of November 02:00 local
+      int64_t a = (int64_t)nthSunday(y, 3, 2) * 86400 + 7200 - std;
+      int64_t b = (int64_t)nthSunday(y, 11, 1) * 86400 + 7200 - (std + 3600);
+      dst = t >= a && t < b;
+      break;
+    }
+    case TZDST_AU: {  // first Sunday of October 02:00 local to first Sunday of April 03:00 local (southern summer)
+      int64_t end = (int64_t)nthSunday(y, 4, 1) * 86400 + 10800 - (std + 3600);
+      int64_t start = (int64_t)nthSunday(y, 10, 1) * 86400 + 7200 - std;
+      dst = t < end || t >= start;
+      break;
+    }
+    default: break;
+  }
+  return std + (dst ? 3600 : 0);
+}

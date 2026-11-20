@@ -68,7 +68,7 @@ jobs:
         run: |
           arduino-cli compile --fqbn "$FQBN" \
             --build-property compiler.cpp.extra_flags=-DTAMAPOKE_GEN3_RELEASE \
-            --build-path build .
+            --build-path build . | tee compile.log
           # debug commands only exist in the local test build
           if strings build/TamaPoke.ino.bin | grep -Eq 'TESTMON|TESTEVO'; then
             echo "Debug command strings found in the release firmware" >&2
@@ -76,10 +76,25 @@ jobs:
           fi
           grep -q "${{ steps.ver.outputs.v }}" <(strings build/TamaPoke.ino.bin)
 
-      - name: Screen simulator (screenshots and layout report)
+      - name: Release safety checks (no update may brick the device)
+        run: |
+          # 1. OTA never rewrites the partition table: it must stay the one on the devices
+          sum=$(sha256sum build/TamaPoke.ino.partitions.bin | cut -d' ' -f1)
+          test "$sum" = "ace02503447d0f470692e65fa76002f2d77a92dc81cd3813d8aa66718d716da9" \
+            || { echo "Partition table changed: an OTA update cannot apply it" >&2; exit 1; }
+          # 2. the firmware must fit the 3 MB OTA slot with a safety margin
+          size=$(stat -c %s build/TamaPoke.ino.bin)
+          echo "app size: $size bytes (slot 3145728)"
+          test "$size" -le 2900000 || { echo "Firmware too close to the OTA slot size" >&2; exit 1; }
+          # 3. static RAM: leave room for Wi-Fi, TLS and the game at run time
+          ram=$(grep -o 'Global variables use [0-9]*' compile.log | grep -o '[0-9]*$')
+          echo "static RAM: $ram bytes"
+          test -n "$ram" && test "$ram" -le 140000 || { echo "Static RAM too high" >&2; exit 1; }
+
+      - name: Screen simulator with AddressSanitizer (screenshots, layout report, memory errors)
         run: |
           sudo apt-get install -y -q zlib1g-dev >/dev/null
-          bash tools/sim/run.sh
+          SIM_SANITIZE=1 bash tools/sim/run.sh
           cat tools/sim/out/layout-report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload screenshots

@@ -3,6 +3,7 @@
 #   tools/sim/run.sh                 all scenes in tools/sim/scenes/
 #   tools/sim/run.sh scenes/main.txt one scene (path relative to tools/sim or the repo)
 # Output: tools/sim/out/*.png and tools/sim/out/layout-report.md
+# SIM_SANITIZE=1 builds with AddressSanitizer/UBSan (memory errors fail the run).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 GFX="${ARDUINO_GFX:-}"
@@ -24,6 +25,11 @@ FLAGS=(-std=gnu++17 -O1 -g -w -DTAMAPOKE_GEN3_RELEASE -DSIM_HOST
        -Itools/sim/stubs -I"$BUILD" -I. -I"$GFX/src")
 SRCS=(tools/sim/sim_main.cpp tools/sim/sim_hw.cpp pet.cpp battle.cpp i18n.cpp
       species_chirp.cpp thumb_format.cpp netlogic.cpp sdmon.cpp)
+# SIM_SANITIZE=1: AddressSanitizer + UBSan, any memory error stops the run (used by CI)
+if [[ "${SIM_SANITIZE:-0}" == 1 ]]; then
+  FLAGS+=(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+  export ASAN_OPTIONS="detect_leaks=0:abort_on_error=1" UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1"
+fi
 "$CXX" "${FLAGS[@]}" "${SRCS[@]}" -lz -o "$BUILD/tamapoke-sim"
 scenes=()
 for a in "$@"; do

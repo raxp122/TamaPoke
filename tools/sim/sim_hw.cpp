@@ -223,12 +223,18 @@ static NetScanItem simScan[4] = {
 };
 static uint32_t simGen = 1;
 
+void otaBootGuard(const char *) {}
 void netBegin(const char *) {
   netListInit(simSaved);
   netListUpsert(simSaved, "Casa", "password1");
   netListUpsert(simSaved, "Ufficio-5G", "secret99");
 }
 void netLoop(uint32_t) {}
+static uint8_t simTz = TZ_DEFAULT;
+uint8_t netTimeZone() { return simTz; }
+void netSetTimeZone(uint8_t z) { simTz = z; simGen++; }
+uint32_t netLastTimeSync() { return 1767265320UL; }
+bool netTakeTime(uint32_t *) { return false; }
 bool netBusy() { return false; }
 uint32_t netGen() { return simGen; }
 bool netAutoCheck() { return simAuto; }

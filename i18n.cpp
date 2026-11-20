@@ -72,6 +72,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "WI-FI", "ACTUALIZAR", "AUTO SI", "AUTO NO", "Auto: busca actualizaciones al inicio", "BUSCAR", "Guardadas %u/%u",
     "Sin redes guardadas", "Toca BUSCAR para anadir", "REDES", "Buscando...", "No hay redes", "Conectando...", "Conectado y guardado", "Contrasena incorrecta?", "Red fuera de alcance", "Conexion fallida", "CONTRASENA", "Olvidar? toca X",
     "Instalada v%s", "Disponible v%s", "BUSCAR", "INSTALAR", "Comprobando...", "Al dia", "Actualizacion lista!", "Actualizacion!", "Reiniciando...", "Sprites actualizados", "No apagues ni desconectes", "Sin Wi-Fi guardada cerca", "Descarga fallida", "Sin version publicada", "Archivo danado, reintenta", "Error de microSD", "microSD llena", "Error al escribir flash", "Primero anade una red Wi-Fi",
+    "Hora manual", "Hora de internet %02u:%02u", "Hora de internet: esperando",
   },
   // ---------------- EN ----------------
   {
@@ -137,6 +138,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "WI-FI", "UPDATE", "AUTO ON", "AUTO OFF", "Auto: look for updates at start", "SEARCH", "Saved %u/%u",
     "No saved networks", "Tap SEARCH to add one", "NETWORKS", "Searching...", "No networks found", "Connecting...", "Connected and saved", "Wrong password?", "Network not in range", "Connection failed", "PASSWORD", "Forget? tap X",
     "Installed v%s", "Available v%s", "CHECK", "INSTALL", "Checking...", "Up to date", "Update available!", "Update ready!", "Restarting...", "Sprites updated", "Keep it on, do not unplug", "No saved Wi-Fi in range", "Download failed", "No release published", "Corrupted file, retry", "microSD error", "microSD full", "Flash write failed", "Add a Wi-Fi network first",
+    "Manual clock", "Internet time %02u:%02u", "Internet time: waiting",
   },
   // ---------------- FR ----------------
   {
@@ -202,6 +204,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "WI-FI", "MISE A JOUR", "AUTO OUI", "AUTO NON", "Auto: cherche les mises a jour au demarrage", "CHERCHER", "Enregistres %u/%u",
     "Aucun reseau enregistre", "Touche CHERCHER pour ajouter", "RESEAUX", "Recherche...", "Aucun reseau trouve", "Connexion...", "Connecte et enregistre", "Mot de passe faux?", "Reseau hors portee", "Connexion echouee", "MOT DE PASSE", "Oublier? touche X",
     "Installee v%s", "Disponible v%s", "VERIFIER", "INSTALLER", "Verification...", "A jour", "Mise a jour dispo!", "Mise a jour!", "Redemarrage...", "Sprites a jour", "Ne pas eteindre ni debrancher", "Aucun Wi-Fi connu proche", "Echec du telechargement", "Aucune version publiee", "Fichier corrompu, reessaie", "Erreur microSD", "microSD pleine", "Echec ecriture flash", "Ajoute d'abord un Wi-Fi",
+    "Heure manuelle", "Heure internet %02u:%02u", "Heure internet: en attente",
   },
   // ---------------- DE ----------------
   {
@@ -267,6 +270,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "WI-FI", "UPDATE", "AUTO AN", "AUTO AUS", "Auto: sucht Updates beim Start", "SUCHEN", "Gespeichert %u/%u",
     "Keine Netze gespeichert", "SUCHEN tippen zum Hinzufuegen", "NETZE", "Suche...", "Keine Netze gefunden", "Verbinde...", "Verbunden, gespeichert", "Falsches Passwort?", "Netz nicht in Reichweite", "Verbindung fehlgeschlagen", "PASSWORT", "Vergessen? X tippen",
     "Installiert v%s", "Verfuegbar v%s", "PRUEFEN", "INSTALLIEREN", "Pruefe...", "Aktuell", "Update verfuegbar!", "Update da!", "Neustart...", "Sprites aktualisiert", "Nicht ausschalten/abziehen", "Kein bekanntes WLAN da", "Download fehlgeschlagen", "Kein Release vorhanden", "Datei defekt, nochmal", "microSD-Fehler", "microSD voll", "Flash-Schreibfehler", "Zuerst ein WLAN hinzufuegen",
+    "Uhr manuell", "Internetzeit %02u:%02u", "Internetzeit: wartet",
   },
   // ---------------- IT ----------------
   {
@@ -332,6 +336,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "WI-FI", "AGGIORNA", "AUTO SI", "AUTO NO", "Auto: cerca aggiornamenti all'avvio", "CERCA", "Salvate %u/%u",
     "Nessuna rete salvata", "Tocca CERCA per aggiungerne", "RETI", "Ricerca...", "Nessuna rete trovata", "Connessione...", "Connesso e salvato", "Password errata?", "Rete non raggiungibile", "Connessione fallita", "PASSWORD", "Dimenticare? tocca X",
     "Installata v%s", "Disponibile v%s", "CONTROLLA", "INSTALLA", "Controllo...", "Gia aggiornato", "Aggiornamento pronto!", "Aggiornamento!", "Riavvio...", "Sprite aggiornati", "Non spegnere, non scollegare", "Nessuna rete salvata vicina", "Download non riuscito", "Nessuna release pubblicata", "File corrotto, riprova", "Errore microSD", "microSD piena", "Scrittura flash fallita", "Prima aggiungi una rete Wi-Fi",
+    "Ora manuale", "Ora da internet %02u:%02u", "Ora da internet: in attesa",
   },
   // ---------------- PT ----------------
   {
@@ -397,6 +402,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "WI-FI", "ATUALIZAR", "AUTO SIM", "AUTO NAO", "Auto: procura atualizacoes ao iniciar", "PROCURAR", "Salvas %u/%u",
     "Nenhuma rede salva", "Toque PROCURAR para juntar", "REDES", "Procurando...", "Nenhuma rede encontrada", "Conectando...", "Conectado e salvo", "Senha errada?", "Rede fora de alcance", "Falha na conexao", "SENHA", "Esquecer? toque X",
     "Instalada v%s", "Disponivel v%s", "VERIFICAR", "INSTALAR", "Verificando...", "Atualizado", "Atualizacao pronta!", "Atualizacao!", "Reiniciando...", "Sprites atualizados", "Nao desligue nem desconecte", "Sem Wi-Fi salvo por perto", "Falha no download", "Nenhuma versao publicada", "Arquivo corrompido", "Erro na microSD", "microSD cheia", "Falha ao gravar flash", "Adicione uma rede Wi-Fi",
+    "Hora manual", "Hora da internet %02u:%02u", "Hora da internet: aguardando",
   },
 };
 

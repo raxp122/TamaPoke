@@ -117,3 +117,19 @@ class TpakParser {
 
 // Valid target name inside a pak: "mons/<file>", only [A-Za-z0-9._-], no "..".
 bool tpakNameValid(const char *name);
+
+// ---------------------------------------------------------------------------
+// Time zones for the internet clock (index 0 = off: the clock is set by hand)
+// ---------------------------------------------------------------------------
+enum TzDst : uint8_t { TZDST_NONE, TZDST_EU, TZDST_US, TZDST_AU };
+struct TzZone {
+  const char *label;     // shown in the settings (ASCII)
+  int16_t stdOffsetMin;  // standard time offset from UTC in minutes
+  TzDst dst;
+};
+#define TZ_OFF 0
+#define TZ_DEFAULT 2  // Central Europe (Italy)
+extern const TzZone TZ_ZONES[];
+extern const uint8_t TZ_COUNT;
+// local time = utc + offset; 0 for TZ_OFF or an unknown zone
+int32_t tzOffsetSeconds(uint8_t zone, uint32_t utcEpoch);

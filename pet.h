@@ -403,3 +403,5 @@ private:
   void load();
   static uint8_t clamp100(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
 };
+
+extern uint32_t gPetLastSaveMs;  // how long the last save to NVS took (ms)
