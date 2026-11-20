@@ -45,12 +45,16 @@
 
   <h2><span class="num">1</span>Flash firmware 1.36.2</h2>
   <div class="step">
-    <p>Connect the board by USB, press install and select its serial port.</p>
+    <p>Plug the board into this computer with a USB cable, press the button below and
+      pick the board's serial port in the window that opens (usually "USB JTAG/serial
+      debug unit" or "ESP32-S3"). There is no separate connect step.</p>
     <esp-web-install-button manifest="manifest.json?v=1.36.2">
-      <button slot="activate">⚡ Install TamaPoke 1.36.2</button>
+      <button slot="activate">🔌 Connect board &amp; install firmware 1.36.2</button>
       <span slot="unsupported">Browser not supported (use Chrome/Edge).</span>
       <span slot="not-allowed">Needs HTTPS or localhost.</span>
     </esp-web-install-button>
+    <p class="unsupported" id="loadfail">⚠️ The flashing tool did not load. Check the internet
+      connection, disable content blockers for this page and reload.</p>
     <p class="note"><b>Updating?</b> Leave <b>Erase device</b> unchecked to keep
       your Pokémon and progress. Erase only a completely new board or a save you
       intentionally want to delete.</p>
@@ -92,6 +96,13 @@
 </div>
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+<script>
+  // the install button comes from a CDN: say so when it never appears
+  setTimeout(() => {
+    if (!customElements.get('esp-web-install-button') && 'serial' in navigator)
+      document.getElementById('loadfail').style.display = 'block';
+  }, 8000);
+</script>
 <script src="installer-gen3.js?v=1.36.2"></script>
 </body>
 </html>
