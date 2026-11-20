@@ -8,8 +8,13 @@
 #include <SD_MMC.h>
 #include <Update.h>
 #include <WiFi.h>
+#include <esp_attr.h>
+#include <esp_heap_caps.h>
 #include <esp_ota_ops.h>
+#include <esp_system.h>
 #include <mbedtls/sha256.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "sdmon.h"
 
@@ -23,7 +28,11 @@
 #define SPRITE_TMP_DIR "/tpota"
 #define AUTO_FIRST_MS 15000UL
 #define AUTO_EVERY_MS (12UL * 3600UL * 1000UL)
-#define CONFIRM_AFTER_MS 20000UL
+#define CONFIRM_AFTER_MS 45000UL      // a new firmware must run this long before it is confirmed
+#define CONFIRM_MIN_HEAP 16000U       // ...and keep at least this much internal heap free
+#define GUARD_CLEAR_MS (5UL * 60UL * 1000UL)  // crash counter is cleared after 5 min of normal running
+#define GUARD_MAX_CRASHES 3
+#define GUARD_MAGIC 0x7A3A0001UL
 #define NET_BLOB_BYTES (6 + NET_MAX * (NET_SSID_LEN + 1 + NET_PASS_LEN + 1 + 4))
 
 // CA bundle of ESP-IDF (part of the precompiled mbedTLS library of the core)
@@ -36,6 +45,39 @@ extern const uint8_t x509_crt_bundle_end[] asm("_binary_x509_crt_bundle_end");
 extern "C" bool verifyRollbackLater() { return true; }
 
 static char curVersion[32];
+static char badVersion[24];  // version rolled back after crashes: not offered automatically again
+
+// Survive resets (not power cycles): consecutive crash counter for the boot guard.
+RTC_NOINIT_ATTR static uint32_t guardMagic;
+RTC_NOINIT_ATTR static uint32_t guardCrashes;
+static bool guardCleared = false;
+
+void otaBootGuard(const char *currentVersion) {
+  esp_reset_reason_t r = esp_reset_reason();
+  bool crash = r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT;
+  if (guardMagic != GUARD_MAGIC || r == ESP_RST_POWERON) {
+    guardMagic = GUARD_MAGIC;
+    guardCrashes = 0;
+  }
+  if (crash) guardCrashes++;
+  else if (r != ESP_RST_SW && r != ESP_RST_DEEPSLEEP) guardCrashes = 0;  // our own restarts are neutral
+  Serial.printf("BOOT reset=%d crashes=%lu\n", (int)r, (unsigned long)guardCrashes);
+  if (guardCrashes < GUARD_MAX_CRASHES) return;
+  guardCrashes = 0;
+  // Three crashes in a row without 5 minutes of normal running: go back to the
+  // previous firmware, if there is one, and remember this version as bad.
+  if (!esp_ota_check_rollback_is_possible()) {
+    Serial.println("BOOT crash loop, no previous firmware to go back to");
+    return;
+  }
+  Preferences p;
+  p.begin(NET_NS, false);
+  p.putString("badver", currentVersion);
+  p.end();
+  Serial.printf("BOOT crash loop: rolling back from %s\n", currentVersion);
+  delay(100);
+  esp_ota_mark_app_invalid_rollback_and_reboot();
+}
 static NetList saved;
 static bool autoCheck = true;
 
@@ -58,6 +100,15 @@ static volatile bool fwNewer = false, sprNeeded = false, available = false;
 static volatile bool sdBusy = false, notice = false, spritesChanged = false;
 static bool checkManual = false;
 static uint32_t nextAuto = AUTO_FIRST_MS;
+
+// internet clock
+#define TIME_FIRST_MS 20000UL
+#define TIME_EVERY_MS (60UL * 60UL * 1000UL)
+static uint8_t tzZone = TZ_DEFAULT;
+static uint32_t nextTime = TIME_FIRST_MS;
+static volatile bool timePending = false;
+static volatile uint32_t timeLocal = 0;   // local epoch waiting to be written to the RTC
+static volatile uint32_t lastSyncLocal = 0;
 static bool confirmed = false;
 
 static void bump() { gen = gen + 1; }
@@ -136,6 +187,9 @@ void netBegin(const char *currentVersion) {
       netListFromBlob(saved, blob, n);
     }
     autoCheck = p.getBool("auto", true);
+    snprintf(badVersion, sizeof(badVersion), "%s", p.getString("badver", "").c_str());
+    tzZone = p.getUChar("tz", TZ_DEFAULT);
+    if (tzZone >= TZ_COUNT) tzZone = TZ_DEFAULT;
     p.end();
   }
   WiFi.persistent(false);  // credentials live in our own list, not in the driver's NVS area
@@ -150,6 +204,29 @@ void netSetAutoCheck(bool on) {
   p.end();
   if (on) nextAuto = millis() + 3000;
   bump();
+}
+
+uint8_t netTimeZone() { return tzZone; }
+
+void netSetTimeZone(uint8_t zone) {
+  if (zone >= TZ_COUNT) return;
+  tzZone = zone;
+  Preferences p;
+  p.begin(NET_NS, false);
+  p.putUChar("tz", zone);
+  p.end();
+  lastSyncLocal = 0;
+  if (zone != TZ_OFF) nextTime = millis() + 2000;  // apply the new zone soon
+  bump();
+}
+
+uint32_t netLastTimeSync() { return lastSyncLocal; }
+
+bool netTakeTime(uint32_t *localEpoch) {
+  if (!timePending) return false;
+  timePending = false;
+  *localEpoch = timeLocal;
+  return true;
 }
 
 bool netForget(int idx) {
@@ -512,7 +589,34 @@ static bool installFirmware(const OtaManifest &m) {
 
 /* ---------------- jobs ---------------- */
 
-enum Job : uint8_t { J_SCAN, J_JOIN, J_CHECK, J_INSTALL };
+// Asks the time servers while connected; the main loop writes the RTC (netTakeTime).
+static bool syncTime() {
+  if (tzZone == TZ_OFF) return false;
+  struct timeval zero = { 0, 0 };
+  settimeofday(&zero, nullptr);  // so a fresh answer is recognisable
+  configTime(0, 0, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
+  time_t now = 0;
+  for (int i = 0; i < 50 && (now = time(nullptr)) < 1700000000; i++) delay(200);
+  if (now < 1700000000) {
+    Serial.println("TIME no answer from the time servers");
+    return false;
+  }
+  uint32_t utc = (uint32_t)now;
+  timeLocal = utc + tzOffsetSeconds(tzZone, utc);
+  lastSyncLocal = timeLocal;
+  timePending = true;
+  nextTime = millis() + TIME_EVERY_MS;
+  Serial.printf("TIME utc=%lu local=%lu zone=%s\n", (unsigned long)utc, (unsigned long)timeLocal, TZ_ZONES[tzZone].label);
+  bump();
+  return true;
+}
+
+static void jobTime() {
+  if (connectKnown()) syncTime();
+  else nextTime = millis() + 10UL * 60UL * 1000UL;  // no network around: try again in 10 minutes
+}
+
+enum Job : uint8_t { J_SCAN, J_JOIN, J_CHECK, J_INSTALL, J_TIME };
 
 static void jobScan() {
   scanSt = SCAN_BUSY;
@@ -578,6 +682,7 @@ static void jobCheck(bool manual) {
     else { otaSt = available ? OTA_AVAILABLE : OTA_IDLE; bump(); }
     return;
   }
+  syncTime();  // already connected: refresh the clock too
   otaSt = OTA_CHECKING;
   bump();
   delay(500);
@@ -592,7 +697,8 @@ static void jobCheck(bool manual) {
   bool was = available;
   available = fwNewer || sprNeeded;
   otaSt = available ? OTA_AVAILABLE : OTA_UP_TO_DATE;
-  if (available && !was && !manual) notice = true;
+  // a version that crashed here and was rolled back is only installed on request
+  if (available && !was && !manual && !(fwNewer && !strcmp(m.version, badVersion))) notice = true;
   Serial.printf("OTA running %s, latest %s, fw=%d sprites=%d\n", curVersion, m.version, fwNewer, sprNeeded);
   bump();
 }
@@ -631,6 +737,7 @@ static void task(void *arg) {
     case J_JOIN: jobJoin(); break;
     case J_CHECK: jobCheck(checkManual); break;
     case J_INSTALL: jobInstall(); break;
+    case J_TIME: jobTime(); break;
   }
   if (otaSt != OTA_REBOOT) radioOff();
   busy = false;
@@ -688,14 +795,32 @@ bool otaStartInstall() {
 }
 
 void netLoop(uint32_t now) {
+  // A new firmware is confirmed only once it has run for a while with enough
+  // memory left; until then a reset or crash brings back the previous one.
   if (!confirmed && now > CONFIRM_AFTER_MS) {
-    confirmed = true;
     const esp_partition_t *run = esp_ota_get_running_partition();
     esp_ota_img_states_t st;
-    if (esp_ota_get_state_partition(run, &st) == ESP_OK && st == ESP_OTA_IMG_PENDING_VERIFY) {
+    if (esp_ota_get_state_partition(run, &st) != ESP_OK || st != ESP_OTA_IMG_PENDING_VERIFY) {
+      confirmed = true;
+    } else if (heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) >= CONFIRM_MIN_HEAP) {
+      confirmed = true;
       esp_ota_mark_app_valid_cancel_rollback();
       Serial.printf("OTA firmware %s confirmed\n", curVersion);
+    } else if (now > CONFIRM_AFTER_MS * 4) {
+      // memory stays too low: refuse this firmware and go back
+      Serial.printf("OTA firmware %s: low memory, rolling back\n", curVersion);
+      esp_ota_mark_app_invalid_rollback_and_reboot();
     }
+  }
+  if (!guardCleared && now > GUARD_CLEAR_MS) {
+    guardCleared = true;
+    guardCrashes = 0;
+  }
+  if (tzZone != TZ_OFF && saved.count && !busy && (int32_t)(now - nextTime) >= 0) {
+    nextTime = now + TIME_EVERY_MS;
+    // the automatic update check (due right after start-up) syncs the clock as well
+    bool checkDue = autoCheck && (int32_t)(now + 10000 - nextAuto) >= 0;
+    if (!checkDue) startJob(J_TIME);
   }
   if (autoCheck && saved.count && !busy && (int32_t)(now - nextAuto) >= 0) {
     nextAuto = now + AUTO_EVERY_MS;

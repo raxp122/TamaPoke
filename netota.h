@@ -47,6 +47,9 @@ struct NetScanItem {
 };
 #define NET_SCAN_MAX 24
 
+// First thing in setup(): counts crash resets; after 3 in a row it rolls back to
+// the previous firmware (and does not offer that version automatically again).
+void otaBootGuard(const char *currentVersion);
 void netBegin(const char *currentVersion);  // setup(): loads saved networks and settings
 // loop(): schedules the automatic check, confirms a new firmware after it ran a while.
 void netLoop(uint32_t now);
@@ -55,6 +58,12 @@ uint32_t netGen();      // changes whenever something visible changes (redraw)
 
 bool netAutoCheck();    // check for updates at start-up and every 12 h
 void netSetAutoCheck(bool on);
+
+// Internet clock: synced at start-up and every hour when a saved network is in range.
+uint8_t netTimeZone();                  // index into TZ_ZONES (TZ_OFF = clock set by hand)
+void netSetTimeZone(uint8_t zone);
+uint32_t netLastTimeSync();             // local epoch of the last sync, 0 = not yet
+bool netTakeTime(uint32_t *localEpoch); // once per sync: the main loop writes it to the RTC
 
 const NetList &netSaved();
 bool netForget(int idx);

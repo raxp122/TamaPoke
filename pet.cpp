@@ -1548,7 +1548,10 @@ PetMood Pet::mood() const {
   return MOOD_HAPPY;
 }
 
+uint32_t gPetLastSaveMs = 0;  // duration of the last save (diagnostics in the settings)
+
 void Pet::save() {
+  uint32_t saveStart = millis();
   ticksSinceSave = 0;
   pendingSave = false;
   prefs.putUChar("full", fullness);
@@ -1633,6 +1636,7 @@ void Pet::save() {
   prefs.putUChar("edlv", evoDeclinedLv);
   prefs.putUInt("edage", evoDeclinedAge);
   prefs.putString("nick", nick);
+  gPetLastSaveMs = millis() - saveStart;
 }
 
 void Pet::load() {

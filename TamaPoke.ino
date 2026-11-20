@@ -28,6 +28,7 @@
 #include "dayphase.h"
 #include "imu.h"
 #include "netota.h"
+#include "gesture.h"
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
@@ -380,6 +381,7 @@ void setup() {
   // y nadie lo vacia) -> con timeout 0 los mensajes se descartan
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s\n", FW_VERSION);
+  otaBootGuard(FW_VERSION);  // crash loop after an update: back to the previous firmware
   loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
   // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
@@ -1003,6 +1005,11 @@ void handleTouch() {
   gTouchIrq = false;
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
+  // El CST9217 a veces pierde el dedo un instante en mitad de un gesto: el dedo
+  // solo se da por levantado tras GESTURE_RELEASE_MS sin contacto (deslizar lento).
+  static uint32_t lastContact = 0;
+  if (pressed) lastContact = now;
+  else if (wasPressed && now - lastContact < GESTURE_RELEASE_MS) return;
 
   // Pantalla apagada por PWR: no despertar por cualquier roce accidental.
   // PWR corto sigue despertando al instante; touch requiere mantener pulsado.
@@ -1049,7 +1056,8 @@ void handleTouch() {
     tY0 = tYl = y;
     tStart = millis();
     holdFired = false;
-    swallowGesture = (dimStage > 0) || screenOff;  // si estaba a oscuras, solo despierta
+    // casi apagada: el primer toque solo despierta. Atenuada (aun visible): el toque vale.
+    swallowGesture = (dimStage >= 2) || screenOff;
     screenOff = false;
     lastInteract = millis();
     if (!swallowGesture && gameOpen && gameMode == 0) {
@@ -1074,9 +1082,14 @@ void handleTouch() {
     int dx = tXl - tX0, dy = tYl - tY0;
     uint32_t dt = millis() - tStart;
     if (!holdFired && !swallowGesture) {
-      if (abs(dx) > 80 && abs(dy) < 70 && dt < 800) onSwipe(dx > 0 ? 1 : -1);
-      else if (abs(dy) > 80 && abs(dx) < 70 && dt < 800) onSwipeV(dy > 0 ? 1 : -1);
-      else if (dt < 1500 && abs(dx) < 40 && abs(dy) < 40) onTap(tX0, tY0);
+      switch (classifyGesture(dx, dy, dt)) {
+        case G_SWIPE_RIGHT: onSwipe(1); break;
+        case G_SWIPE_LEFT: onSwipe(-1); break;
+        case G_SWIPE_DOWN: onSwipeV(1); break;
+        case G_SWIPE_UP: onSwipeV(-1); break;
+        case G_TAP: onTap(tX0, tY0); break;
+        default: break;
+      }
     }
   }
   wasPressed = pressed;
@@ -3504,6 +3517,7 @@ void drawClockBtn(int x, int y, const char *l) {
 #define NET_PILL_W 146
 #define NET_PILL_X1 82
 #define NET_PILL_X2 238
+#define NET_DIM_INK 0x8410
 
 const char *soundModeLabel() {
   switch (audioMode()) {
@@ -3775,12 +3789,18 @@ void renderClock() {
   snprintf(st1, sizeof(st1), "FW v%s  SAVE %s", FW_VERSION, pet.saveLoadedFromNvs ? T(S_OK) : T(S_STATUS_NEW));
   snprintf(st2, sizeof(st2), "SD %s  SPR %s  PET %s", sdReady ? "OK" : "NO",
            (pmd.loaded || mon.loaded) ? T(S_OK) : T(S_STATUS_FLASH_NO), petLine);
+  // diagnostica: ultimo guardado y bucle mas lento de los ultimos minutos
+  char st3[48];
+  snprintf(st3, sizeof(st3), "SAVE %lums  LOOP MAX %lums", (unsigned long)gPetLastSaveMs, (unsigned long)perfLoopMaxMs);
   gfx->setTextSize(1);
   gfx->setTextColor(UI_INK);
-  gfx->setCursor(CX - (int)strlen(st1) * 3, 374);
+  gfx->setCursor(CX - (int)strlen(st1) * 3, 372);
   gfx->print(st1);
-  gfx->setCursor(CX - (int)strlen(st2) * 3, 388);
+  gfx->setCursor(CX - (int)strlen(st2) * 3, 386);
   gfx->print(st2);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setCursor(CX - (int)strlen(st3) * 3, 396);
+  gfx->print(st3);
 
   gfx->fillRoundRect(96, 404, 110, 40, 13, UI_WHITE);
   gfx->drawRoundRect(96, 404, 110, 40, 13, UI_INK);
@@ -3840,7 +3860,10 @@ void clockTap(int16_t x, int16_t y) {
 // las comprobaciones de "pantalla de ajustes abierta" siguen valiendo.
 
 #define NET_DIM 0x8410
-#define NET_ROWS_SAVED 5
+#define NET_ROWS_SAVED 4
+#define NET_ROW0_Y 200
+#define NET_ROW_STEP 41
+#define NET_TZ_Y 140
 #define NET_ROWS_SCAN 6
 
 static const char *const PW_KEYS[3][4] = {
@@ -3957,13 +3980,24 @@ static void renderNetWifi() {
   bool on = netAutoCheck();
   netPill(66, 98, 160, 34, on ? T(S_NET_AUTO_ON) : T(S_NET_AUTO_OFF), on ? UI_BAR_OK : UI_WHITE, on ? UI_BG_DAY : UI_INK, 2);
   netPill(240, 98, 160, 34, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
-  netText(140, T(S_NET_AUTO_HINT), NET_DIM, 1);
+  // fuso orario: toque a la izquierda = anterior, a la derecha = siguiente
+  uint8_t tz = netTimeZone();
+  char tzl[32];
+  snprintf(tzl, sizeof(tzl), "<  %s  >", tz == TZ_OFF ? T(S_TZ_MANUAL) : TZ_ZONES[tz].label);
+  netPill(66, NET_TZ_Y, 334, 32, tzl, UI_WHITE, UI_INK, 2);
+  char syncLine[48];
+  uint32_t ls = netLastTimeSync();
+  if (tz == TZ_OFF) snprintf(syncLine, sizeof(syncLine), "%s", T(S_NET_AUTO_HINT));
+  else if (ls) snprintf(syncLine, sizeof(syncLine), T(S_TZ_SYNCED_FMT), (unsigned)((ls / 3600) % 24), (unsigned)((ls / 60) % 60));
+  else snprintf(syncLine, sizeof(syncLine), "%s", T(S_TZ_WAIT));
+  netText(178, syncLine, NET_DIM, 1);
+  if (tz != TZ_OFF) netText(188, T(S_NET_AUTO_HINT), NET_DIM, 1);
 
   int order[NET_MAX];
   int n = netListOrder(l, order);
   if (!n) {
-    netText(210, T(S_NET_NONE), UI_INK, 2);
-    netText(240, T(S_NET_TAP_SEARCH), NET_DIM, 1);
+    netText(240, T(S_NET_NONE), UI_INK, 2);
+    netText(270, T(S_NET_TAP_SEARCH), NET_DIM, 1);
   }
   int pages = (n + NET_ROWS_SAVED - 1) / NET_ROWS_SAVED;
   if (netListPage >= pages) netListPage = pages ? pages - 1 : 0;
@@ -3971,7 +4005,7 @@ static void renderNetWifi() {
     int k = netListPage * NET_ROWS_SAVED + r;
     if (k >= n) break;
     int idx = order[k];
-    int y = 158 + r * 42;
+    int y = NET_ROW0_Y + r * NET_ROW_STEP;
     bool pending = netForgetIdx == idx;
     gfx->fillRoundRect(58, y, 350, 38, 9, UI_WHITE);
     gfx->drawRoundRect(58, y, 350, 38, 9, pending ? UI_BAR_BAD : UI_INK);
@@ -3987,11 +4021,11 @@ static void renderNetWifi() {
     gfx->print("X");
   }
   if (pages > 1) {
-    netPill(90, 370, 50, 28, "<", netListPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
-    netPill(326, 370, 50, 28, ">", netListPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
+    netPill(96, 366, 50, 28, "<", netListPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
+    netPill(320, 366, 50, 28, ">", netListPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
     char pg[12];
     snprintf(pg, sizeof(pg), "%u/%u", (unsigned)(netListPage + 1), (unsigned)pages);
-    netText(377, pg, UI_INK, 2);
+    netText(372, pg, UI_INK, 2);
   }
   netPill(163, 404, 140, 40, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
 }
@@ -4000,6 +4034,14 @@ static void netWifiTap(int16_t x, int16_t y) {
   if (inBox(x, y, 163, 404, 140, 40)) { closeNet(); return; }
   if (inBox(x, y, 66, 98, 160, 34)) {
     netSetAutoCheck(!netAutoCheck());
+    sfxPlay(SFX_TAP);
+    return;
+  }
+  if (inBox(x, y, 66, NET_TZ_Y, 334, 32)) {
+    uint8_t tz = netTimeZone();
+    tz = x < CX ? (tz + TZ_COUNT - 1) % TZ_COUNT : (tz + 1) % TZ_COUNT;
+    netSetTimeZone(tz);
+    netDirty = true;
     sfxPlay(SFX_TAP);
     return;
   }
@@ -4017,16 +4059,16 @@ static void netWifiTap(int16_t x, int16_t y) {
   int order[NET_MAX];
   int n = netListOrder(l, order);
   int pages = (n + NET_ROWS_SAVED - 1) / NET_ROWS_SAVED;
-  if (pages > 1 && y >= 370 && y < 398) {
-    if (x >= 90 && x < 140 && netListPage > 0) { netListPage--; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
-    if (x >= 326 && x < 376 && netListPage + 1 < pages) { netListPage++; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
+  if (pages > 1 && y >= 366 && y < 394) {
+    if (x >= 96 && x < 146 && netListPage > 0) { netListPage--; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
+    if (x >= 320 && x < 370 && netListPage + 1 < pages) { netListPage++; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
     return;
   }
   for (int r = 0; r < NET_ROWS_SAVED; r++) {
     int k = netListPage * NET_ROWS_SAVED + r;
     if (k >= n) break;
     int idx = order[k];
-    int ry = 158 + r * 42;
+    int ry = NET_ROW0_Y + r * NET_ROW_STEP;
     if (!inBox(x, y, 58, ry, 350, 38)) continue;
     if (netBusy()) { sfxPlay(SFX_DENY); return; }
     if (x >= 352) {  // X: primer toque pide confirmacion, el segundo borra
@@ -4291,6 +4333,13 @@ void netTap(int16_t x, int16_t y) {
 // en cada vuelta del loop: aviso, recarga de sprites y reinicio tras instalar
 void netService(uint32_t now) {
   netLoop(now);
+  uint32_t localEpoch;
+  if (netTakeTime(&localEpoch)) {  // ora da internet: RTC y reloj del juego
+    rtcSetEpoch(localEpoch);
+    pet.setClock(localEpoch);
+    clockDirty = true;
+    if (netOpen) netDirty = true;
+  }
   if (netOpen && netGen() != netSeenGen) netDirty = true;
   if (otaTakeNotice()) {
     snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_UPD_NOTICE));

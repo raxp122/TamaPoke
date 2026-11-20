@@ -1,0 +1,64 @@
+# Robustness run (CI with AddressSanitizer): ~10 simulated minutes of use.
+tap 233 150
+tap 233 233
+wait 1000
+tap 233 230
+wait 300
+tap 233 230
+wait 300
+tap 233 230
+wait 6000
+# feed, play every minigame, bath, light, battle card, pokedex, settings
+tap 140 390
+tap 200 320
+wait 4000
+tap 202 404
+tap 157 185
+wait 20000
+pwr
+tap 202 404
+tap 309 185
+wait 20000
+pwr
+tap 202 404
+tap 157 255
+wait 20000
+pwr
+tap 202 404
+tap 309 255
+wait 20000
+pwr
+tap 202 404
+tap 233 327
+wait 20000
+pwr
+tap 326 390
+wait 5000
+tap 264 404
+wait 5000
+tap 264 404
+swipe 233 380 233 120
+swipe 380 233 90 233
+swipe 380 233 90 233
+swipe 380 233 90 233
+swipe 380 233 90 233
+tap 233 311
+wait 30000
+tap 233 300
+wait 3000
+pwr
+pwr
+swipe 90 233 380 233
+swipe 380 233 90 233
+swipe 380 233 90 233
+tap 150 150
+pwr
+pwr
+swipe 233 100 233 380
+tap 180 311
+tap 180 311
+tap 380 311
+tap 380 311
+pwr
+wait 300000
+shot 90_soak_end

@@ -248,7 +248,31 @@ static void testTpakRejects() {
   }
 }
 
+static void testTimeZones() {
+  EXPECT_EQ(tzOffsetSeconds(TZ_OFF, 1767225600u), 0);
+  // Italy: 2026-01-15 12:00 UTC winter +1h; 2026-07-15 summer +2h
+  EXPECT_EQ(tzOffsetSeconds(2, 1768478400u), 3600);
+  EXPECT_EQ(tzOffsetSeconds(2, 1784116800u), 7200);
+  // EU switch 2026: Sunday 29 March 01:00 UTC (1774746000), Sunday 25 October 01:00 UTC (1792890000)
+  EXPECT_EQ(tzOffsetSeconds(2, 1774746000u - 1), 3600);
+  EXPECT_EQ(tzOffsetSeconds(2, 1774746000u), 7200);
+  EXPECT_EQ(tzOffsetSeconds(2, 1792890000u - 1), 7200);
+  EXPECT_EQ(tzOffsetSeconds(2, 1792890000u), 3600);
+  // US Eastern 2026: DST from 8 March 07:00 UTC (1772953200) to 1 November 06:00 UTC (1793512800)
+  EXPECT_EQ(tzOffsetSeconds(7, 1772953200u - 1), -5 * 3600);
+  EXPECT_EQ(tzOffsetSeconds(7, 1772953200u), -4 * 3600);
+  EXPECT_EQ(tzOffsetSeconds(7, 1793512800u - 1), -4 * 3600);
+  EXPECT_EQ(tzOffsetSeconds(7, 1793512800u), -5 * 3600);
+  // Sydney: January is summer (+11), July winter (+10)
+  EXPECT_EQ(tzOffsetSeconds(16, 1768478400u), 11 * 3600);
+  EXPECT_EQ(tzOffsetSeconds(16, 1784116800u), 10 * 3600);
+  // India has half hours, no DST
+  EXPECT_EQ(tzOffsetSeconds(12, 1784116800u), 330 * 60);
+  EXPECT_EQ(tzOffsetSeconds(200, 1784116800u), 0);
+}
+
 int main() {
+  testTimeZones();
   testUpsertAndFind();
   testEvictsLeastRecentlyUsed();
   testRemoveAndOrder();
