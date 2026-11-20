@@ -1,6 +1,6 @@
 # TamaPoke
 
-[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
+[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://raxp122.github.io/TamaPoke/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
 ![Firmware](https://img.shields.io/badge/firmware-v1.36.2-4F93C4)
@@ -8,17 +8,15 @@
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 
 TamaPoke is a Pokémon-inspired virtual pet for the
-**Waveshare ESP32-S3-Touch-AMOLED-1.75**. This is ShadowEnemyx's expanded fork.
-
-> Use only the ShadowEnemyx installer linked here. The upstream project is
-> credited as the original source, but its installer contains a different build.
+**Waveshare ESP32-S3-Touch-AMOLED-1.75**. This fork of ShadowEnemyx's expanded
+TamaPoke adds Wi-Fi and over-the-air updates.
 
 ## Install the current public version
 
-### [Open the ShadowEnemyx web installer](https://shadowenemyx.github.io/TamaPoke/web/)
+### [Open the web installer](https://raxp122.github.io/TamaPoke/)
 
-The hosted installer serves firmware `1.36.2` with all 386 Pokémon from
-Generations 1–3. Use desktop **Chrome or Edge**:
+The hosted installer always serves the latest release (rebuilt on every merge
+into `main`) with all 386 Pokémon from Generations 1–3. Use desktop **Chrome or Edge**:
 
 1. Connect the Waveshare board by USB and install the firmware.
 2. When updating, leave **Erase device unchecked** to preserve the save.
@@ -103,7 +101,8 @@ Every merge into `main` builds and publishes a release automatically
 (`.github/workflows/release.yml`, version `1.37.<build>`).
 
 **First installation** of a firmware with OTA support has to be done once over
-USB, without erasing the flash: from the release write
+USB with the [web installer](https://raxp122.github.io/TamaPoke/) (leave *Erase
+device* unchecked), or manually without erasing the flash: from the release write
 `tamapoke-bootloader.bin` at `0x0`, `tamapoke-partitions.bin` at `0x8000`,
 `tamapoke-boot_app0.bin` at `0xe000` and `tamapoke-app.bin` at `0x10000`.
 
