@@ -1,0 +1,58 @@
+# Visits every screen. Coordinates are panel pixels (466x466).
+# --- first start, hatch the egg
+tap 233 150          # region: Kanto
+tap 233 233          # starter
+wait 2000
+tap 233 230
+wait 400
+tap 233 230
+wait 400
+tap 233 230
+wait 6000
+shot 10_main
+# --- cards (swipe up, then swipe left for the next card)
+swipe 233 380 233 120
+shot 20_card_profile
+swipe 380 233 90 233
+shot 21_card_personality
+swipe 380 233 90 233
+shot 22_card_daily
+swipe 380 233 90 233
+shot 23_card_box
+swipe 380 233 90 233
+shot 24_card_battle
+swipe 380 233 90 233
+shot 25_card_medals
+swipe 380 233 90 233
+shot 26_card_progress
+swipe 380 233 90 233
+shot 27_card_expedition
+swipe 380 233 90 233
+shot 28_card_steps
+swipe 233 380 233 120
+# --- settings
+swipe 233 100 233 380
+shot 30_settings
+tap 155 350
+shot 31_wifi
+tap 320 115
+shot 32_wifi_scan
+tap 233 155
+shot 33_wifi_password
+tap 233 398
+tap 233 424
+tap 311 350
+ota available
+shot 34_update
+tap 233 424
+tap 150 424
+shot 35_help
+tap 380 233
+shot 36_help_2
+tap 233 420
+swipe 233 100 233 380
+# --- pokedex
+swipe 90 233 380 233
+shot 40_pokedex
+tap 150 150
+shot 41_pokedex_detail

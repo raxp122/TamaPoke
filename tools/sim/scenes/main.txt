@@ -1,0 +1,7 @@
+# first start: region and starter, then the main screen
+shot 00_region
+tap 233 233
+shot 01_starter
+tap 233 233
+wait 3000
+shot 02_main
