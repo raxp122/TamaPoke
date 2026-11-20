@@ -50,7 +50,6 @@ hardware diagnostics.
 - profile, personality, medals, collector ranks and cosmetic frames
 - RTC-based day/night and offline progression
 - synthetic species chirps and sound effects; no game audio or ROM samples
-- subtle moving `@SE` attribution watermark
 - persistent step counter visible at top left and on the Steps/Trail card
 - complete browser save backup/restore with an automatic safety backup
 - Pokédex filters for region, raised, caught and Shiny Pokémon
@@ -70,10 +69,12 @@ the cadence filter confirms real rhythmic steps. Single bumps are rejected.
 - Tap the Pokémon: pet it and play its synthetic chirp in the full sound mode.
 - Swipe sideways: Pokédex/gallery.
 - Swipe up: Profile, Personality, Daily, Box, Battle, Medals, Progress,
-  Expedition and Steps/Trail cards.
-- Swipe down: clock, language, sound, power saving and help.
+  Expedition and Steps/Trail cards (swipe sideways to change card).
+- Swipe down: clock, language, sound, power saving, Wi-Fi, updates and help.
+- **Short PWR press: back.** In any menu, card, Pokédex or dialog it closes the
+  current screen; on the main screen it locks the display (PWR again wakes it).
 - Hold the Pokémon for three seconds: release dialog.
-- Short PWR press: display on/off. Long PWR press: full power-off.
+- Long PWR press: full power-off.
 
 Four needs decay over time: **FOOD, JOY, ENE and HYG**. Evolution requires the
 species' level and at least three of those four values strictly above 40.

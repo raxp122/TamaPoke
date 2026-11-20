@@ -130,7 +130,6 @@ bool gameMenuDirty = true;
 bool battleDirty = true;
 bool starterDirty = true;
 
-int8_t watermarkDrawnSlot = -1;
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -227,7 +226,6 @@ uint8_t currentDayPhase();
 bool mainScreenReadyForShake();
 void maybeOfferMorning(uint32_t now);
 uint32_t pmdActTotalMs(const PmdAct &a);
-bool watermarkNeedsRedraw();
 void flushStampedFrame();
 void startBattleWith(int16_t forcedDex, uint8_t forcedLevel, int8_t forcedShiny = -1);
 void startBattle();
@@ -362,7 +360,6 @@ const char *screenName() {
 }
 
 bool staticScreenClean() {
-  if (watermarkNeedsRedraw()) return false;
   if (pet.awaitingStarter()) return !starterDirty;
   if (galleryOpen && !galleryDetail) return !galleryDirty;
   if (battleOpen && battleResolved) return !battleDirty;
@@ -616,15 +613,19 @@ void loop() {
   if (now - lastPwr > 250) {
     lastPwr = now;
     if (pwrShortPressed()) {
-      bool wasOff = screenOff;
-      screenOff = !screenOff;
-      if (!screenOff) {
+      if (screenOff) {  // bloqueada: PWR despierta
+        screenOff = false;
         lastInteract = now;
-        if (wasOff) {
-          ignoreTouchUntil = now + 900;
-          swallowGesture = true;
-          wasPressed = false;
-        }
+        ignoreTouchUntil = now + 900;
+        swallowGesture = true;
+        wasPressed = false;
+        markUiDirty();
+      } else if (goBack()) {  // en menus y ventanas: PWR = atras
+        lastInteract = now;
+        dimStage = 0;
+        sfxPlay(SFX_TAP);
+      } else {  // pantalla principal: PWR bloquea
+        screenOff = true;
       }
     }
   }
@@ -1037,8 +1038,7 @@ void handleTouch() {
   if (sackOpen) {
     if (pressed && !wasPressed) {
       lastInteract = millis();
-      if (y < 72) sackOpen = false;  // tocar arriba = abandonar
-      else sackTap();
+      sackTap();  // abandonar: PWR
     }
     wasPressed = pressed;
     return;
@@ -1082,7 +1082,59 @@ void handleTouch() {
   wasPressed = pressed;
 }
 
-// deslizar vertical: abre/cierra la ficha del bicho
+// PWR corto fuera de la pantalla principal: cierra lo que este abierto.
+// Devuelve false en la pantalla principal (alli PWR bloquea la pantalla).
+bool goBack() {
+  uint32_t now = millis();
+  if (pet.awaitingStarter()) {
+    if (starterRegion == 0xFF) return false;
+    starterRegion = 0xFF;  // de la eleccion de inicial a la de region
+    starterDirty = true;
+    return true;
+  }
+  if (netOpen) { closeNet(); return true; }
+  if (helpOpen) { helpOpen = false; clockOpen = true; clockDirty = true; lockTouchBrief(); return true; }
+  if (kbOpen) { kbOpen = false; cardDirty = true; lockTouchBrief(); return true; }  // renombrar: cancelar
+  if (galleryOpen) {
+    if (galleryDetail) {
+      galleryDetail = 0;
+      galleryDirty = true;
+    } else {
+      galleryOpen = false;
+      markUiDirty();
+    }
+    galleryPmd.unload();
+    lockTouchBrief();
+    return true;
+  }
+  if (gameOpen) { gameOpen = false; markUiDirty(); lockTouchBrief(); return true; }   // abandonar sin premio
+  if (sackOpen) { sackOpen = false; markUiDirty(); lockTouchBrief(); return true; }
+  if (battleOpen) {
+    if (battleResolved) closeBattle();  // en pleno combate PWR no hace nada (no huir por error)
+    return true;
+  }
+  if (clockOpen) { clockOpen = false; markUiDirty(); lockTouchBrief(); return true; }
+  if (cardOpen) {
+    if (expeditionTrainChoiceOpen) expeditionTrainChoiceOpen = false;
+    else cardOpen = false;
+    markUiDirty();
+    lockTouchBrief();
+    return true;
+  }
+  if (gameMenuOpen) { gameMenuOpen = false; markUiDirty(); lockTouchBrief(); return true; }
+  if (choiceKind) { choiceKind = 0; markUiDirty(); return true; }
+  if (confirmUntil) { confirmUntil = 0; markUiDirty(); return true; }
+  if (feedMenuUntil) { feedMenuUntil = 0; markUiDirty(); return true; }
+  if (wildPromptUntil && deadlineActive(now, wildPromptUntil)) {
+    wildPromptUntil = 0;
+    scheduleNextWild(now);
+    markUiDirty();
+    return true;
+  }
+  return false;
+}
+
+// deslizar vertical: abre la ficha (arriba) o los ajustes (abajo) desde la pantalla principal
 void openClock();  // prototipo
 int16_t boxDexAt(uint16_t index);
 uint8_t boxPageCount();
@@ -1107,18 +1159,13 @@ void openStepsCard();
 void drawStepsHud();
 
 void onSwipeV(int dir) {
-  if (netOpen) { closeNet(); return; }
-  if (helpOpen) { helpOpen = false; clockOpen = true; clockDirty = true; lockTouchBrief(); sfxPlay(SFX_TAP); return; }
+  if (netOpen || helpOpen) return;  // se sale con PWR
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (wildPromptUntil && deadlineActive(millis(), wildPromptUntil)) return;
   if (wildPromptUntil) wildPromptUntil = 0;
   if (gameMenuOpen) return;
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
-  if (clockOpen) { clockOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); return; }
-  if (cardOpen) {
-    if (dir < 0) { cardOpen = false; expeditionTrainChoiceOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); }  // arriba cierra la ficha
-    return;
-  }
+  if (clockOpen || cardOpen) return;  // se sale con PWR
   if (dir > 0) {                    // deslizar abajo: ajustar hora
     if (!confirmUntil && !feedMenuUntil) openClock();
   } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
@@ -1162,23 +1209,10 @@ void onSwipe(int dir) {
     }
     return;
   }
-  if (galleryDetail) {  // en detalle: volver a la rejilla
-    galleryDetail = 0;
-    galleryPmd.unload();
-    galleryDirty = true;
-    lockTouchBrief();
-    return;
-  }
+  if (galleryDetail) return;  // en detalle: PWR vuelve a la rejilla
   int np = galleryPage - dir;  // deslizar a la izquierda avanza pagina
   int maxPage = galleryPageCount() - 1;
-  if (np < 0) {                // retroceder desde la primera = salir
-    galleryOpen = false;
-    galleryPmd.unload();
-    markUiDirty();
-    lockTouchBrief();
-    sfxPlay(SFX_TAP);
-    return;
-  }
+  if (np < 0) np = 0;          // se sale con PWR
   if (np > maxPage) np = maxPage;
   if (np != galleryPage) {
     galleryPage = np;
@@ -1312,10 +1346,6 @@ void onTap(int16_t x, int16_t y) {
             sfxPlay(SFX_TAP);
             speciesChirpPlay(dex);
           }
-        } else if (y >= 400) {
-          cardOpen = false;
-          markUiDirty();
-          lockTouchBrief();
         }
       }
     } else if (cardPage == 4 && y >= 286 && y <= 336 && x >= 82 && x <= 384) {
@@ -1330,11 +1360,6 @@ void onTap(int16_t x, int16_t y) {
       startSack();
     } else if (cardPage == 7) {
       expeditionCardTap(x, y);
-    } else if (y >= 400) {
-      cardOpen = false;
-      markUiDirty();
-      lockTouchBrief();
-      sfxPlay(SFX_TAP);
     }
     return;
   }
@@ -1520,54 +1545,7 @@ uint16_t lerp565(uint16_t a, uint16_t b, int i, int n) {
                     (((ag + (bg - ag) * i / n) << 5)) | (ab + (bb - ab) * i / n));
 }
 
-static uint8_t watermarkSlot() {
-  return (uint8_t)((millis() / 20000UL) & 3U);
-}
-
-bool watermarkNeedsRedraw() {
-  return !screenOff && watermarkDrawnSlot != (int8_t)watermarkSlot();
-}
-
-static uint16_t watermarkPixel(uint16_t base) {
-  int r = ((base >> 11) & 31) * 255 / 31;
-  int g = ((base >> 5) & 63) * 255 / 63;
-  int b = (base & 31) * 255 / 31;
-  int luminance = (r * 30 + g * 59 + b * 11) / 100;
-  return lerp565(base, luminance > 145 ? 0x0000 : 0xFFFF, 1, 4);
-}
-
-static void drawWatermark(uint8_t slot) {
-  static const uint8_t GLYPHS[3][7] = {
-    { 0x0E, 0x11, 0x17, 0x15, 0x17, 0x10, 0x0E },  // @
-    { 0x1F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E },  // S
-    { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F },  // E
-  };
-  static const int16_t POS[4][2] = {
-    { 74, 74 }, { 374, 74 }, { 74, 384 }, { 374, 384 },
-  };
-  uint16_t *fb = gfx->getFramebuffer();
-  if (!fb) return;
-  int16_t ox = POS[slot][0];
-  int16_t oy = POS[slot][1];
-  for (uint8_t glyph = 0; glyph < 3; glyph++) {
-    for (uint8_t row = 0; row < 7; row++) {
-      uint8_t bits = GLYPHS[glyph][row];
-      for (uint8_t col = 0; col < 5; col++) {
-        if (!(bits & (1U << (4 - col)))) continue;
-        int16_t x = ox + glyph * 6 + col;
-        int16_t y = oy + row;
-        if (x < 0 || x >= LCD_WIDTH || y < 0 || y >= LCD_HEIGHT) continue;
-        uint32_t idx = (uint32_t)y * LCD_WIDTH + x;
-        fb[idx] = watermarkPixel(fb[idx]);
-      }
-    }
-  }
-}
-
 void flushStampedFrame() {
-  uint8_t slot = watermarkSlot();
-  drawWatermark(slot);
-  watermarkDrawnSlot = (int8_t)slot;
   gfx->flush();
 }
 
@@ -1729,17 +1707,6 @@ void renderStarterSelect() {
 }
 
 void render() {
-  if (watermarkNeedsRedraw()) {
-    starterDirty = true;
-    cardDirty = true;
-    clockDirty = true;
-    helpDirty = true;
-    keyboardDirty = true;
-    gameMenuDirty = true;
-    battleDirty = true;
-    galleryDirty = true;
-    netDirty = true;
-  }
   if (staticScreenClean()) { perfRenderSkipCount++; return; }
   if (pet.awaitingStarter()) {  // primera partida: region y starter (prioridad total)
     if (starterRegion == 0xFF) renderStarterRegionSelect();
@@ -2125,11 +2092,6 @@ void gameTap(int16_t x, int16_t y) {
     return;
   }
   if (gameOverUntil) return;
-  if (y < 72) {  // tocar la cabecera = abandonar sin premio
-    gameOpen = false;
-    sfxPlay(SFX_TAP);
-    return;
-  }
   float dx = ballX - x, dy = ballY - y;
   int hitRadius = ballHitRadius();
   if (dx * dx + dy * dy < hitRadius * hitRadius) {  // toque a la bola!
@@ -2161,7 +2123,6 @@ void finishCatchGame() {
 
 void catchTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
   int dx = x - catchX, dy = y - catchY;
   if (dx * dx + dy * dy <= 52 * 52) {
     gameScore++;
@@ -2201,7 +2162,6 @@ void memoPadSound(uint8_t pad) {
 
 void memoTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
   if (memoShowing || memoFailUntil || deadlineActive(millis(), memoTurnUntil)) return;
   int pad = memoPadAt(x, y);
   if (pad < 0) return;
@@ -2235,7 +2195,6 @@ void finishCleanGame() {
 
 void cleanTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
   for (uint8_t i = 0; i < 4; i++) {
     if (!cleanAlive[i]) continue;
     int dx = x - cleanX[i], dy = y - cleanY[i];
@@ -2263,7 +2222,6 @@ void finishTypeGame() {
 
 void typeTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
   int idx = -1;
   for (int i = 0; i < 3; i++) {
     int by = 210 + i * 60;
@@ -3585,7 +3543,7 @@ static const char *const HELP_TITLES[LANG_COUNT][HELP_PAGE_COUNT] = {
 static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT] = {
   {
     { "Comida baja = descuido.", "Jugar sube alegria.", "Bano limpia suciedad.", "Tocar da alegria/vinc.", "Peso alto te frena.", "Dulce alegra, engorda." },
-    { "Dormir recupera energia.", "Durmiendo todo baja lento.", "Luz despierta o duerme.", "PWR corto apaga pantalla.", "Ahorro usa light sleep.", "Sin borrar conserva save." },
+    { "Dormir recupera energia.", "Durmiendo todo baja lento.", "Luz despierta o duerme.", "PWR: atras; en casa bloq.", "Ahorro usa light sleep.", "Sin borrar conserva save." },
     { "Bola: toca la bola.", "Atrapa: toca iconos.", "Memo: repite secuencia.", "Limpia: toca manchas.", "Tipo: elige ventaja.", "Dan records y entreno." },
     { "Rapido: menos dano.", "Rival esquiva poco.", "Recibes algo menos dano.", "Fuerte: mas dano.", "Riesgo y contra mayor.", "No siempre conviene." },
     { "Esquivar evita dano.", "Si sale: Contra listo.", "Prox ataque pega mas.", "Ruhe/Descanso cura 2x.", "Tambien da Guardia.", "Tipos suben/bajan dano." },
@@ -3595,7 +3553,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   },
   {
     { "Low food = slip-up.", "Play raises joy.", "Bath cleans dirt.", "Petting gives joy/bond.", "High weight slows you.", "Candy cheers but fattens." },
-    { "Sleep restores energy.", "Needs decay slower asleep.", "Light toggles sleep.", "Short PWR screen off.", "Power Save light-sleeps.", "No erase keeps saves." },
+    { "Sleep restores energy.", "Needs decay slower asleep.", "Light toggles sleep.", "PWR: back; locks at home.", "Power Save light-sleeps.", "No erase keeps saves." },
     { "Ball: tap the ball.", "Catch: tap icons.", "Memo: repeat sequence.", "Clean: tap stains.", "Type: pick advantage.", "Records and training." },
     { "Quick: lower damage.", "Enemy dodges less.", "You take less damage.", "Heavy: more damage.", "More risk/counterplay.", "Not always best." },
     { "Dodge avoids damage.", "Success: Counter ready.", "Next attack hits harder.", "Rest heals only 2x.", "Rest also gives Guard.", "Types change damage." },
@@ -3605,7 +3563,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   },
   {
     { "Faim basse = erreur.", "Jouer monte la joie.", "Bain nettoie.", "Caresse donne lien/joie.", "Poids haut ralentit.", "Bonbon rend gros." },
-    { "Sommeil rend energie.", "Besoins baissent moins.", "Lumiere dort/reveille.", "PWR court eteint ecran.", "Eco utilise light sleep.", "Sans erase garde save." },
+    { "Sommeil rend energie.", "Besoins baissent moins.", "Lumiere dort/reveille.", "PWR: retour; verrou accueil", "Eco utilise light sleep.", "Sans erase garde save." },
     { "Balle: touche la balle.", "Attrape: touche icones.", "Memo: repete sequence.", "Nettoie: touche taches.", "Type: choisis avantage.", "Records et entrainement." },
     { "Rapide: degats bas.", "Ennemi esquive moins.", "Tu subis moins.", "Fort: degats hauts.", "Risque plus grand.", "Pas toujours meilleur." },
     { "Esquive evite degats.", "Succes: Contre pret.", "Prochaine attaque plus.", "Repos soigne 2 fois.", "Repos donne Garde.", "Types changent degats." },
@@ -3615,7 +3573,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   },
   {
     { "Food 0 = Patzer.", "Spielen hebt Freude.", "Bad reinigt Hygiene.", "Streicheln gibt Bond.", "Hohes Gewicht bremst.", "Candy freut, macht dick." },
-    { "Schlaf gibt Energie.", "Needs sinken langsamer.", "Licht: schlafen/wach.", "PWR kurz: Screen aus.", "Sparen nutzt Light Sleep.", "Ohne Erase bleibt Save." },
+    { "Schlaf gibt Energie.", "Needs sinken langsamer.", "Licht: schlafen/wach.", "PWR: zurueck; Start sperrt", "Sparen nutzt Light Sleep.", "Ohne Erase bleibt Save." },
     { "Ball: Ball antippen.", "Fangen: Icons treffen.", "Memo: Folge merken.", "Putzen: Flecken tippen.", "Typ: Vorteil waehlen.", "Gibt Rekorde/Training." },
     { "Schnell: weniger Schaden.", "Gegner weicht selten aus.", "Du kassierst weniger.", "Stark: mehr Schaden.", "Mehr Risiko/Gegendruck.", "Nicht immer beste Wahl." },
     { "Ausweichen meidet Schaden.", "Klappt es: Konter bereit.", "Naechster Angriff staerker.", "Ruhen heilt nur 2x.", "Ruhen gibt auch Schutz.", "Typen aendern Schaden." },
@@ -3625,7 +3583,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   },
   {
     { "Cibo 0 = errore.", "Gioca aumenta gioia.", "Bagno pulisce.", "Carezza da legame.", "Peso alto rallenta.", "Dolce rallegra, ingrassa." },
-    { "Sonno da energia.", "Bisogni calano meno.", "Luce dorme/sveglia.", "PWR corto spegne schermo.", "Risparmio usa light sleep.", "Senza erase salva." },
+    { "Sonno da energia.", "Bisogni calano meno.", "Luce dorme/sveglia.", "PWR: indietro; blocca home", "Risparmio usa light sleep.", "Senza erase salva." },
     { "Palla: tocca palla.", "Prendi: tocca icone.", "Memo: ripeti sequenza.", "Pulisci: tocca macchie.", "Tipo: scegli vantaggio.", "Record e allenamento." },
     { "Rapido: meno danni.", "Nemico schiva meno.", "Subisci meno danni.", "Forte: piu danni.", "Piu rischio.", "Non sempre migliore." },
     { "Schiva evita danni.", "Successo: contro pronto.", "Prox attacco piu forte.", "Riposo cura solo 2x.", "Riposo da Guardia.", "Tipi cambiano danni." },
@@ -3635,7 +3593,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   },
   {
     { "Comida 0 = falha.", "Jogar sobe alegria.", "Banho limpa.", "Carinho da vinculo.", "Peso alto atrasa.", "Doce alegra, engorda." },
-    { "Sono da energia.", "Necessidades caem menos.", "Luz dorme/acorda.", "PWR curto apaga tela.", "Poupanca usa light sleep.", "Sem erase guarda save." },
+    { "Sono da energia.", "Necessidades caem menos.", "Luz dorme/acorda.", "PWR: voltar; bloqueia home", "Poupanca usa light sleep.", "Sem erase guarda save." },
     { "Bola: toque na bola.", "Pegar: toque icones.", "Memo: repita sequencia.", "Limpa: toque manchas.", "Tipo: escolha vantagem.", "Recordes e treino." },
     { "Rapido: dano menor.", "Rival desvia menos.", "Voce recebe menos.", "Forte: dano maior.", "Mais risco.", "Nem sempre melhor." },
     { "Desviar evita dano.", "Sucesso: contra pronto.", "Prox ataque mais forte.", "Descanso cura so 2x.", "Descanso da Guarda.", "Tipos mudam dano." },
@@ -5256,10 +5214,6 @@ void renderExpeditionTrainChoice() {
       gfx->print(maxed);
     }
   }
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 268);
-  gfx->print(T(S_BACK));
 }
 
 void renderCardExpedition() {
@@ -5465,10 +5419,6 @@ void renderCard() {
     if (i == cardPage) gfx->fillCircle(dotsX + i * 24, 400, 5, UI_INK);
     else gfx->drawCircle(dotsX + i * 24, 400, 4, UI_INK);
   }
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 420);
-  gfx->print(T(S_BACK));
   flushStampedFrame();
 }
 
@@ -5647,10 +5597,6 @@ void renderGallery() {
       gfx->setCursor(CX - strlen(mark) * 6, reg ? 376 : 366);
       gfx->print(mark);
     }
-    gfx->setTextColor(UI_INK);
-    gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
-    gfx->print(T(S_DETAIL_BACK));
     flushStampedFrame();
     return;
   }
@@ -5744,17 +5690,8 @@ void renderGallery() {
 }
 
 void galleryTap(int16_t x, int16_t y) {
-  if (galleryDetail) {  // volver a la rejilla
-    galleryDetail = 0;
-    galleryPmd.unload();
-    galleryDirty = true;
-    sfxPlay(SFX_TAP);
-    return;
-  }
-  if (y < 46) {  // tocar la cabecera = salir
-    galleryOpen = false;
-    galleryPmd.unload();
-    sfxPlay(SFX_TAP);
+  if (galleryDetail) {  // tocar el detalle: su sonido (se vuelve con PWR)
+    if (pet.isRegistered(galleryDetail) || pet.isCaught(galleryDetail)) speciesChirpPlay(galleryDetail, true);
     return;
   }
   if (y >= 68 && y < GAL_Y) {

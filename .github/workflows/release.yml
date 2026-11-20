@@ -76,6 +76,18 @@ jobs:
           fi
           grep -q "${{ steps.ver.outputs.v }}" <(strings build/TamaPoke.ino.bin)
 
+      - name: Screen simulator (screenshots and layout report)
+        run: |
+          sudo apt-get install -y -q zlib1g-dev >/dev/null
+          bash tools/sim/run.sh
+          cat tools/sim/out/layout-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens-${{ steps.ver.outputs.v }}
+          path: tools/sim/out/
+
       - name: Sprite pack and version.json
         run: |
           mkdir -p dist

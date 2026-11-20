@@ -14,6 +14,9 @@ più un installer da browser in `web/`.
 - `.github/workflows/release.yml`: compila a ogni push; a ogni push su `main` pubblica una release GitHub
   con `version.json`, `tamapoke-app.bin`, `tamapoke-sprites.pak` (più i file per il primo flash via USB).
 - `tools/`: script per sprite e installer web; `tests/`: test nativi.
+- `tools/sim/`: simulatore dello schermo sul PC (il vero `TamaPoke.ino` con hardware finto). `bash tools/sim/run.sh`
+  esegue i copioni in `tools/sim/scenes/` e scrive in `tools/sim/out/` gli screenshot e `layout-report.md`
+  (elementi fuori dal cerchio, pulsanti sotto 44 px). Le modifiche all'interfaccia si controllano qui prima dell'hardware.
 
 ## Versioni
 
