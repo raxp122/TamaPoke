@@ -10,6 +10,17 @@ wait 400
 tap 233 230
 wait 6000
 shot 10_main
+tap 130 352
+shot 11_feed_menu
+pwr
+tap 197 391
+shot 12_game_menu
+pwr
+tap 269 391
+wait 1500
+shot 13_sleeping
+tap 269 391
+wait 1500
 # --- cards (swipe up, then swipe left for the next card)
 swipe 233 380 233 120
 shot 20_card_profile
