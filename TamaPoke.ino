@@ -703,8 +703,11 @@ void updateBrightness(uint32_t now) {
   }
   uint32_t idle = now - lastInteract;
   dimStage = (idle > 300000) ? 2 : (idle > 90000) ? 1 : 0;
-  uint8_t target = pet.sleeping ? 25 : (usbPresent() ? 180 : 145);
-  if (dimStage == 1) target = pet.sleeping ? 10 : 60;
+  // luz de noche solo en la pantalla del bicho dormido: en menus, fichas,
+  // Pokedex y ajustes el brillo es el normal
+  bool sleepDim = pet.sleeping && !strcmp(screenName(), "main");
+  uint8_t target = sleepDim ? 25 : (usbPresent() ? 180 : 145);
+  if (dimStage == 1) target = sleepDim ? 10 : 60;
   else if (dimStage == 2) target = 8;
   if (screenOff) target = 0;
   static uint8_t current = 255;
