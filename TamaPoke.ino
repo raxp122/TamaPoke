@@ -30,6 +30,10 @@
 #include "netota.h"
 #include "gesture.h"
 
+// arcos de las barras de necesidades (ver drawBars): pixeles precalculados
+struct ArcPix { uint16_t x, y; uint8_t t; };
+struct ArcShape { float startDeg, endDeg; ArcPix *pix; uint16_t n; };
+
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
 #if defined(TAMAPOKE_LOCAL_TEST) && defined(TAMAPOKE_GEN3_RELEASE)
@@ -265,12 +269,13 @@ struct Btn {
   const char *const *icon;
 };
 Btn buttons[4] = {
-  { 140, 390, SPR_ICON_FOOD },   // comer
-  { 202, 404, SPR_ICON_PLAY },   // jugar
-  { 264, 404, SPR_ICON_LIGHT },  // luz
-  { 326, 390, SPR_ICON_CLEAN },  // bano
+  { 130, 352, SPR_ICON_FOOD },   // comer
+  { 197, 391, SPR_ICON_PLAY },   // jugar
+  { 269, 391, SPR_ICON_LIGHT },  // luz
+  { 336, 352, SPR_ICON_CLEAN },  // bano
 };
-#define BTN_HALF 26  // boton de 52x52
+#define BTN_HALF 34  // boton de 68x68 siguiendo la curva de abajo
+#define FEED_MENU_Y 214  // selector de comida, sobre el bicho
 #define BTN_HIT 36   // radio tactil (un poco mas generoso)
 
 // grietas del huevo (pixeles 'k' sobre el sprite)
@@ -1464,7 +1469,7 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (feedMenuUntil) {       // selector de comida
-    if (deadlineActive(millis(), feedMenuUntil) && y >= 288 && y <= 352 && x >= 101 && x <= 365) {
+    if (deadlineActive(millis(), feedMenuUntil) && y >= FEED_MENU_Y && y <= FEED_MENU_Y + 64 && x >= 101 && x <= 365) {
       int item = (x - 101) / 66;
       if (item == 3) pet.feedCandy();
       else pet.feedBerry(item);
@@ -1499,7 +1504,7 @@ void onTap(int16_t x, int16_t y) {
   }
   for (int i = 0; i < 4; i++) {
     int dx = x - buttons[i].cx, dy = y - buttons[i].cy;
-    if (dx * dx + dy * dy <= BTN_HIT * BTN_HIT) {
+    if (abs(dx) <= BTN_HALF + 6 && abs(dy) <= BTN_HALF + 6) {
       Serial.printf("BTN %d\n", i);
       sfxPlay(SFX_TAP);
       if (i == 0) {
@@ -1810,14 +1815,11 @@ void render() {
     const char *base = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
     snprintf(name, sizeof(name), T(S_NAME_FMT), pet.shiny ? "*" : "", base, pet.level());
     drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
-    drawStreakBadge();
     drawStepsHud();
     drawPet();
     drawBath();
     drawPoops();
     drawExpeditionHud();
-    // panel inferior: base limpia para barras y botones sobre el paisaje
-    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();
     drawButtons();
     drawCelebration();
@@ -1858,12 +1860,12 @@ void render() {
     if (deadlineReached(millis(), feedMenuUntil)) {
       feedMenuUntil = 0;
     } else {
-      gfx->fillRoundRect(101, 288, 264, 64, 14, UI_WHITE);
-      gfx->drawRoundRect(101, 288, 264, 64, 14, inkColor());
-      drawMap(SPR_ICON_FOOD, 16, 110, 296, 3, false);
-      drawMap(SPR_ICON_BERRY_B, 16, 176, 296, 3, false);
-      drawMap(SPR_ICON_BERRY_G, 16, 242, 296, 3, false);
-      drawMap(SPR_ICON_CANDY, 16, 308, 296, 3, false);
+      gfx->fillRoundRect(101, FEED_MENU_Y, 264, 64, 14, UI_WHITE);
+      gfx->drawRoundRect(101, FEED_MENU_Y, 264, 64, 14, inkColor());
+      drawMap(SPR_ICON_FOOD, 16, 110, FEED_MENU_Y + 8, 3, false);
+      drawMap(SPR_ICON_BERRY_B, 16, 176, FEED_MENU_Y + 8, 3, false);
+      drawMap(SPR_ICON_BERRY_G, 16, 242, FEED_MENU_Y + 8, 3, false);
+      drawMap(SPR_ICON_CANDY, 16, 308, FEED_MENU_Y + 8, 3, false);
     }
   }
 
@@ -5114,18 +5116,18 @@ uint32_t expeditionNowEpoch() {
   return nowEpoch ? nowEpoch : pet.lastSeenEpoch;
 }
 
-static const int EXP_HUD_X = 310;
-static const int EXP_HUD_Y = 106;
+static const int EXP_HUD_X = 286;
+static const int EXP_HUD_Y = 128;
 static const int EXP_HUD_W = 112;
 static const int EXP_HUD_H = 34;
 
 // Der obere Rand des runden Displays ist an den Ecken nicht sichtbar. Der
 // Schritt-Chip sitzt deshalb links ueber dem Namen, innerhalb der Kreisflaeche;
 // rechts bleibt der Expeditions-Hinweis frei.
-static const int STEP_HUD_X = 130;
-static const int STEP_HUD_Y = 24;
-static const int STEP_HUD_W = 126;
-static const int STEP_HUD_H = 22;
+static const int STEP_HUD_X = 138;
+static const int STEP_HUD_Y = 20;
+static const int STEP_HUD_W = 190;
+static const int STEP_HUD_H = 44;
 
 bool inStepsHudHit(int16_t x, int16_t y) {
   return x >= STEP_HUD_X && x <= STEP_HUD_X + STEP_HUD_W &&
@@ -5146,11 +5148,27 @@ void drawStepsHud() {
                    pet.stepsToday >= 500UL ? UI_BAR_OK : UI_TRACK;
   char label[24];
   snprintf(label, sizeof(label), "%s %lu", T(S_STEPS), (unsigned long)pet.stepsToday);
-  gfx->fillRoundRect(STEP_HUD_X, STEP_HUD_Y, STEP_HUD_W, STEP_HUD_H, 8, UI_WHITE);
-  gfx->drawRoundRect(STEP_HUD_X, STEP_HUD_Y, STEP_HUD_W, STEP_HUD_H, 8, color);
+  gfx->fillRoundRect(STEP_HUD_X, STEP_HUD_Y, STEP_HUD_W, STEP_HUD_H, 12, UI_WHITE);
+  gfx->drawRoundRect(STEP_HUD_X, STEP_HUD_Y, STEP_HUD_W, STEP_HUD_H, 12, color);
+  int left = STEP_HUD_X + 6;
+  if (pet.streak >= 1 && !pet.isEgg()) {  // racha: llama + dias, a la izquierda
+    int fx = STEP_HUD_X + 12, fy = STEP_HUD_Y + 13;
+    gfx->fillTriangle(fx + 7, fy, fx, fy + 17, fx + 14, fy + 17, UI_BAR_BAD);
+    gfx->fillTriangle(fx + 7, fy + 7, fx + 3, fy + 17, fx + 11, fy + 17, UI_BAR_WARN);
+    char st[6];
+    snprintf(st, sizeof(st), "%u", pet.streak);
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(1);
+    gfx->setCursor(fx + 17, fy + 10);
+    gfx->print(st);
+    left = fx + 18 + (int)strlen(st) * 6;
+  }
+  drawBattery();
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(1);
-  gfx->setCursor(STEP_HUD_X + (STEP_HUD_W - (int)strlen(label) * 6) / 2, STEP_HUD_Y + 10);
+  gfx->setTextSize(2);
+  int tw = (int)strlen(label) * 12;
+  int avail = STEP_HUD_X + STEP_HUD_W - (batPercent() >= 0 ? 42 : 6) - left;
+  gfx->setCursor(left + (avail - tw) / 2, STEP_HUD_Y + 15);
   gfx->print(label);
 }
 
@@ -5770,10 +5788,11 @@ void galleryTap(int16_t x, int16_t y) {
 void drawBattery() {
   int pc = batPercent();
   if (pc < 0) return;  // sin bateria conectada
-  int x = CX - 14, y = 12, w = 24, h = 11;
+  // dentro de la pildora de pasos, a la derecha
+  int x = STEP_HUD_X + STEP_HUD_W - 38, y = STEP_HUD_Y + (STEP_HUD_H - 11) / 2, w = 24, h = 11;
   bool charging = batCharging();
   uint16_t col = charging ? UI_BAR_OK
-                 : (pc >= 40) ? inkColor()
+                 : (pc >= 40) ? UI_INK  // la pildora es siempre blanca
                  : (pc >= 15) ? UI_BAR_WARN
                               : UI_BAR_BAD;
   gfx->drawRoundRect(x, y, w, h, 2, col);
@@ -5791,14 +5810,13 @@ void drawBattery() {
 }
 
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
-  drawBattery();
   gfx->setTextColor(nameColor);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(name) * 9, 52);
+  gfx->setCursor(CX - strlen(name) * 9, 72);
   gfx->print(name);
   gfx->setTextColor(inkColor());
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(msg) * 6, 90);
+  gfx->setCursor(CX - strlen(msg) * 6, 102);
   gfx->print(msg);
 }
 
@@ -6292,32 +6310,99 @@ void drawPoops() {
   }
 }
 
-void drawBars() {
-  drawBar(78, 318, T(S_BAR_FOOD), pet.fullness);
-  drawBar(244, 318, T(S_BAR_JOY), pet.joy);
-  drawBar(78, 346, T(S_BAR_ENE), pet.energy);
-  drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
+// Barras de necesidades: cuatro arcos junto al borde redondo (dos a cada lado),
+// cada uno con el icono de su boton. Se llenan hacia arriba.
+// Los pixeles de cada arco se calculan una vez (PSRAM) con su posicion a lo largo
+// del arco (0-255): dibujar es solo pintar la lista, sin trigonometria por frame.
+#define ARC_R_IN 206
+#define ARC_R_OUT 221
+#define ARC_ICON_R 180
+
+static ArcShape needArcs[4] = {
+  { 186, 224, nullptr, 0 },  // comida: arriba izquierda
+  { 136, 174, nullptr, 0 },  // energia: abajo izquierda
+  { 354, 316, nullptr, 0 },  // alegria: arriba derecha
+  { 44, 6, nullptr, 0 },     // higiene: abajo derecha
+};
+
+static void arcPoint(float deg, float r, int &x, int &y) {
+  float a = deg * (float)PI / 180.0f;
+  x = (int)lroundf(CX + r * cosf(a));
+  y = (int)lroundf(CY + r * sinf(a));
 }
 
-void drawBar(int x, int y, const char *label, uint8_t val) {
-  gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(x, y);
-  gfx->print(label);
-  int bx = x + 48, bw = 100, bh = 15;  // +48: deja sitio a etiquetas de 4 letras (EN)
+static void buildArc(ArcShape &a) {
+  float lo = a.startDeg < a.endDeg ? a.startDeg : a.endDeg;
+  float hi = a.startDeg < a.endDeg ? a.endDeg : a.startDeg;
+  float rMid = (ARC_R_IN + ARC_R_OUT) / 2.0f, capR = (ARC_R_OUT - ARC_R_IN) / 2.0f + 0.5f;
+  int sx, sy, ex, ey;
+  arcPoint(a.startDeg, rMid, sx, sy);
+  arcPoint(a.endDeg, rMid, ex, ey);
+  for (int pass = 0; pass < 2; pass++) {  // 1: contar, 2: guardar
+    uint16_t n = 0;
+    for (int y = 0; y < LCD_HEIGHT; y++) {
+      for (int x = 0; x < LCD_WIDTH; x++) {
+        float dx = x - CX, dy = y - CY, r2 = dx * dx + dy * dy;
+        if (r2 < (ARC_R_IN - 9) * (ARC_R_IN - 9) || r2 > (ARC_R_OUT + 1) * (ARC_R_OUT + 1)) continue;
+        float deg = atan2f(dy, dx) * 180.0f / (float)PI;
+        if (deg < 0) deg += 360.0f;
+        float t;
+        bool inRing = r2 >= ARC_R_IN * ARC_R_IN && r2 <= ARC_R_OUT * ARC_R_OUT;
+        if (inRing && deg >= lo && deg <= hi) {
+          t = (deg - a.startDeg) / (a.endDeg - a.startDeg);
+        } else if ((x - sx) * (x - sx) + (y - sy) * (y - sy) <= capR * capR) {
+          t = 0;  // punta redondeada del inicio
+        } else if ((x - ex) * (x - ex) + (y - ey) * (y - ey) <= capR * capR) {
+          t = 1;  // punta del final
+        } else {
+          continue;
+        }
+        if (pass == 1) a.pix[n] = { (uint16_t)x, (uint16_t)y, (uint8_t)(t * 255.0f + 0.5f) };
+        n++;
+      }
+    }
+    if (pass == 0) {
+      a.pix = (ArcPix *)ps_malloc(sizeof(ArcPix) * n);
+      if (!a.pix) return;
+    }
+    a.n = n;
+  }
+}
+
+static void drawNeedArc(ArcShape &a, uint8_t val, const char *const *icon) {
+  if (!a.pix) buildArc(a);
   uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
-  gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
-  int fw = (bw - 4) * val / 100;
-  if (fw > 0) gfx->fillRoundRect(bx + 2, y + 2, fw, bh - 4, 3, fill);
+  uint16_t track = gNight ? 0x4208 : UI_TRACK;
+  uint16_t *fb = gfx->getFramebuffer();
+  uint16_t limit = val ? (uint16_t)(val * 255 / 100) : 0;
+  if (fb && a.pix) {
+    for (uint16_t i = 0; i < a.n; i++) {
+      const ArcPix &p = a.pix[i];
+      fb[p.y * LCD_WIDTH + p.x] = (val && p.t <= limit) ? fill : track;
+    }
+  }
+  int ix, iy;
+  arcPoint((a.startDeg + a.endDeg) / 2, ARC_ICON_R, ix, iy);
+  gfx->fillCircle(ix, iy, 19, gNight ? UI_BG_NIGHT : UI_WHITE);
+  gfx->drawCircle(ix, iy, 19, fill);
+  gfx->drawCircle(ix, iy, 18, fill);
+  drawMap(icon, 16, ix - 16, iy - 16, 2, false);
+}
+
+void drawBars() {
+  drawNeedArc(needArcs[0], pet.fullness, SPR_ICON_FOOD);
+  drawNeedArc(needArcs[1], pet.energy, SPR_ICON_LIGHT);
+  drawNeedArc(needArcs[2], pet.joy, SPR_ICON_PLAY);
+  drawNeedArc(needArcs[3], pet.hygiene, SPR_ICON_CLEAN);
 }
 
 void drawButtons() {
   for (int i = 0; i < 4; i++) {
     bool off = pet.sleeping && i != 2;  // durmiendo solo funciona LUZ
     int bx = buttons[i].cx - BTN_HALF, by = buttons[i].cy - BTN_HALF;
-    if (!pet.sleeping) gfx->fillRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 14, UI_WHITE);
-    gfx->drawRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 14, inkColor());
-    if (!off) drawMap(buttons[i].icon, 16, buttons[i].cx - 16, buttons[i].cy - 16, 2, false);
+    gfx->fillRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 18, pet.sleeping ? UI_BG_NIGHT : UI_WHITE);
+    gfx->drawRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 18, inkColor());
+    if (!off) drawMap(buttons[i].icon, 16, buttons[i].cx - 24, buttons[i].cy - 24, 3, false);
   }
 }
 
