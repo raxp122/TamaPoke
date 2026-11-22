@@ -54,6 +54,11 @@ struct ArcShape { float startDeg, endDeg; ArcPix *pix; uint16_t n; };
 #define FW_VERSION "1.35.3-soft-step"
 #endif
 #define HELP_PAGE_COUNT 8
+#define HELP_NAV_Y 358
+#define HELP_NAV_H 54
+#define HELP_NAV_W 120
+#define HELP_PREV_X 96
+#define HELP_NEXT_X 250
 #define HELP_LINE_COUNT 6
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
@@ -104,7 +109,9 @@ uint8_t boxPage = 0;
 uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
 bool expeditionTrainChoiceOpen = false;
 ExpeditionSite expeditionSiteChoice = EXP_SITE_COAST;
-bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
+bool clockOpen = false;       // ajustes (deslizar abajo): menu y sus paginas
+enum SetPage : uint8_t { SETP_MENU, SETP_TIME, SETP_SOUND, SETP_INFO };
+uint8_t setPage = SETP_MENU;
 int clockH = 12, clockM = 0;  // hora en edicion
 bool powerSave = false;       // ahorro opcional: off por defecto
 bool helpOpen = false;
@@ -1114,7 +1121,7 @@ bool goBack() {
     return true;
   }
   if (netOpen) { closeNet(); return true; }
-  if (helpOpen) { helpOpen = false; clockOpen = true; clockDirty = true; lockTouchBrief(); return true; }
+  if (helpOpen) { helpOpen = false; clockOpen = true; setPage = SETP_MENU; clockDirty = true; lockTouchBrief(); return true; }
   if (kbOpen) { kbOpen = false; cardDirty = true; lockTouchBrief(); return true; }  // renombrar: cancelar
   if (galleryOpen) {
     if (galleryDetail) {
@@ -1134,7 +1141,12 @@ bool goBack() {
     if (battleResolved) closeBattle();  // en pleno combate PWR no hace nada (no huir por error)
     return true;
   }
-  if (clockOpen) { clockOpen = false; markUiDirty(); lockTouchBrief(); return true; }
+  if (clockOpen) {
+    if (setPage != SETP_MENU) { setPage = SETP_MENU; clockDirty = true; }
+    else { clockOpen = false; markUiDirty(); }
+    lockTouchBrief();
+    return true;
+  }
   if (cardOpen) {
     if (expeditionTrainChoiceOpen) expeditionTrainChoiceOpen = false;
     else cardOpen = false;
@@ -3479,10 +3491,8 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
 // El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
 // no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
 
-void openClock() {
-  uint32_t e = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
-  clockH = (e / 3600) % 24;
-  clockM = (e / 60) % 60;
+void openClock() {  // abre el menu de ajustes
+  setPage = SETP_MENU;
   clockOpen = true;
   clockDirty = true;
   lockTouchBrief();
@@ -3494,8 +3504,8 @@ void applyClock() {
   uint32_t e = (base / 86400) * 86400 + (uint32_t)clockH * 3600 + (uint32_t)clockM * 60;
   rtcSetEpoch(e);
   pet.setClock(e);
-  clockOpen = false;
-  markUiDirty();
+  setPage = SETP_MENU;  // vuelve al menu de ajustes
+  clockDirty = true;
   lockTouchBrief();
 }
 
@@ -3508,20 +3518,6 @@ void drawClockBtn(int x, int y, const char *l) {
   gfx->print(l);
 }
 
-// pildoras de idioma centradas en y; rellena la activa
-#define LANG_PILL_Y 296
-#define LANG_PILL_H 30
-#define LANG_PILL_X 336          // pildora de idioma (cicla los 6 al tocar)
-#define LANG_PILL_W 96
-#define SOUND_PILL_X 24
-#define SOUND_PILL_W 116
-#define PSAVE_PILL_X 150
-#define PSAVE_PILL_W 176
-#define NET_PILL_Y 334
-#define NET_PILL_H 32
-#define NET_PILL_W 146
-#define NET_PILL_X1 82
-#define NET_PILL_X2 238
 #define NET_DIM_INK 0x8410
 
 const char *soundModeLabel() {
@@ -3566,7 +3562,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Bola: toca la bola.", "Atrapa: toca iconos.", "Memo: repite secuencia.", "Limpia: toca manchas.", "Tipo: elige ventaja.", "Dan records y entreno." },
     { "Rapido: menos dano.", "Rival esquiva poco.", "Recibes algo menos dano.", "Fuerte: mas dano.", "Riesgo y contra mayor.", "No siempre conviene." },
     { "Esquivar evita dano.", "Si sale: Contra listo.", "Prox ataque pega mas.", "Ruhe/Descanso cura 2x.", "Tambien da Guardia.", "Tipos suben/bajan dano." },
-    { "Pokedex: desliza lado.", "Criado y atrapado cuentan.", "10/25/50/100/151/160/200/251/300/386: marcos.", "Perfil: elige marco.", "Detalle conocido: chirp.", "SON TODO: toca pet." },
+    { "Pokedex: desliza lado.", "Criado y atrapado cuentan.", "10/25/50/100/151/160/200/251/300/386: marcos.", "Perfil: elige marco.", "Detalle conocido: chirp.", "SONIDO TODO: toca pet." },
     { "Diario da metas diarias.", "Eventos salen raros.", "Batallas salvajes opc.", "Captura tras ganar.", "Rachas y medallas quedan.", "Agita: juega. Paseo da FEL." },
     { "Expedicion: 15/30/60 min.", "Cuesta energia al salir.", "El bicho sigue disponible.", "Buen cuidado mejora premio.", "Recoge 1 objeto al volver.", "Chip abre esta tarjeta." },
   },
@@ -3576,7 +3572,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Ball: tap the ball.", "Catch: tap icons.", "Memo: repeat sequence.", "Clean: tap stains.", "Type: pick advantage.", "Records and training." },
     { "Quick: lower damage.", "Enemy dodges less.", "You take less damage.", "Heavy: more damage.", "More risk/counterplay.", "Not always best." },
     { "Dodge avoids damage.", "Success: Counter ready.", "Next attack hits harder.", "Rest heals only 2x.", "Rest also gives Guard.", "Types change damage." },
-    { "Pokedex: side swipe.", "Raised and caught count.", "10/25/50/100/151/160/200/251/300/386: frames.", "Profile: choose frame.", "Known detail: species chirp.", "SND ALL: tap pet." },
+    { "Pokedex: side swipe.", "Raised and caught count.", "10/25/50/100/151/160/200/251/300/386: frames.", "Profile: choose frame.", "Known detail: species chirp.", "SOUND FULL: tap pet." },
     { "Daily gives small goals.", "Events appear rarely.", "Wild battles are optional.", "Catch after winning.", "Streaks/medals persist.", "Shake to play. Walk gives JOY." },
     { "Expedition: 15/30/60 min.", "Energy is spent at start.", "Pet stays available.", "Care and bond improve finds.", "Claim 1 item when back.", "Chip opens this card." },
   },
@@ -3596,7 +3592,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Ball: Ball antippen.", "Fangen: Icons treffen.", "Memo: Folge merken.", "Putzen: Flecken tippen.", "Typ: Vorteil waehlen.", "Gibt Rekorde/Training." },
     { "Schnell: weniger Schaden.", "Gegner weicht selten aus.", "Du kassierst weniger.", "Stark: mehr Schaden.", "Mehr Risiko/Gegendruck.", "Nicht immer beste Wahl." },
     { "Ausweichen meidet Schaden.", "Klappt es: Konter bereit.", "Naechster Angriff staerker.", "Ruhen heilt nur 2x.", "Ruhen gibt auch Schutz.", "Typen aendern Schaden." },
-    { "Pokedex: seitlich wischen.", "Aufz./gefangen zaehlen.", "10/25/50/100/151/160/200/251/300/386: Rahmen.", "Profil: Rahmen waehlen.", "Bekanntes Detail: Chirp.", "TON VIEL: Pet tippen." },
+    { "Pokedex: seitlich wischen.", "Aufz./gefangen zaehlen.", "10/25/50/100/151/160/200/251/300/386: Rahmen.", "Profil: Rahmen waehlen.", "Bekanntes Detail: Chirp.", "TON VOLL: Pet tippen." },
     { "Taeglich gibt Ziele.", "Events sind selten.", "Wildkampf ist optional.", "Fangen nach Sieg.", "Serien/Medaillen bleiben.", "Schuetteln spielt. Gehen = JOY." },
     { "Expedition: 15/30/60 Min.", "Kostet beim Start Energie.", "Pet bleibt verfuegbar.", "Pflege/Bond verbessert Fund.", "Fund danach einsammeln.", "Chip oeffnet diese Karte." },
   },
@@ -3606,7 +3602,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Palla: tocca palla.", "Prendi: tocca icone.", "Memo: ripeti sequenza.", "Pulisci: tocca macchie.", "Tipo: scegli vantaggio.", "Record e allenamento." },
     { "Rapido: meno danni.", "Nemico schiva meno.", "Subisci meno danni.", "Forte: piu danni.", "Piu rischio.", "Non sempre migliore." },
     { "Schiva evita danni.", "Successo: contro pronto.", "Prox attacco piu forte.", "Riposo cura solo 2x.", "Riposo da Guardia.", "Tipi cambiano danni." },
-    { "Pokedex: scorri lato.", "Allevato e preso contano.", "10/25/50/100/151/160/200/251/300/386: cornici.", "Profilo: scegli cornice.", "Dettaglio noto: chirp.", "SON TUTTO: tocca pet." },
+    { "Pokedex: scorri lato.", "Allevato e preso contano.", "10/25/50/100/151/160/200/251/300/386: cornici.", "Profilo: scegli cornice.", "Dettaglio noto: chirp.", "SUONO TUTTO: tocca pet." },
     { "Quotidiano da obiettivi.", "Eventi rari.", "Lotte selvatiche opz.", "Cattura dopo vittoria.", "Serie/medaglie restano.", "Scuoti: gioca. Cammina = GIO." },
     { "Spedizione: 15/30/60 min.", "Energia spesa alla partenza.", "Il pet resta disponibile.", "Cura/legame migliora premio.", "Ritira 1 oggetto al ritorno.", "Chip apre questa carta." },
   },
@@ -3616,11 +3612,13 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Bola: toque na bola.", "Pegar: toque icones.", "Memo: repita sequencia.", "Limpa: toque manchas.", "Tipo: escolha vantagem.", "Recordes e treino." },
     { "Rapido: dano menor.", "Rival desvia menos.", "Voce recebe menos.", "Forte: dano maior.", "Mais risco.", "Nem sempre melhor." },
     { "Desviar evita dano.", "Sucesso: contra pronto.", "Prox ataque mais forte.", "Descanso cura so 2x.", "Descanso da Guarda.", "Tipos mudam dano." },
-    { "Pokedex: deslize lado.", "Criado e apanhado contam.", "10/25/50/100/151/160/200/251/300/386: molduras.", "Perfil: escolha moldura.", "Detalhe conhecido: chirp.", "SOM TODO: toque pet." },
+    { "Pokedex: deslize lado.", "Criado e apanhado contam.", "10/25/50/100/151/160/200/251/300/386: molduras.", "Perfil: escolha moldura.", "Detalhe conhecido: chirp.", "SOM TUDO: toque pet." },
     { "Diario da metas.", "Eventos sao raros.", "Batalha selvagem opc.", "Captura apos vitoria.", "Series/medalhas ficam.", "Agita: joga. Andar da ALE." },
     { "Expedicao: 15/30/60 min.", "Energia gasta ao sair.", "Pet fica disponivel.", "Cuidado/laco melhora premio.", "Recolhe 1 item ao voltar.", "Chip abre este cartao." },
   },
 };
+
+static void setButton(int x, int y, int w, int h, const char *label, uint16_t fill, uint16_t ink, uint8_t size);
 
 void renderHelp() {
   helpDirty = false;
@@ -3649,31 +3647,13 @@ void renderHelp() {
 
   char pg[12];
   snprintf(pg, sizeof(pg), "%u/%u", helpPage + 1, HELP_PAGE_COUNT);
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - strlen(pg) * 6, 340);
-  gfx->print(pg);
-
-  if (helpPage > 0) {
-    gfx->fillRoundRect(48, 398, 82, 42, 12, UI_WHITE);
-    gfx->drawRoundRect(48, 398, 82, 42, 12, UI_INK);
-    gfx->setTextColor(UI_INK);
-    gfx->setTextSize(2);
-    gfx->setCursor(72, 412);
-    gfx->print("<<");
-  }
-  gfx->fillRoundRect(154, 398, 158, 42, 12, UI_BAR_OK);
-  gfx->setTextColor(UI_BG_DAY);
+  gfx->setTextColor(NET_DIM_INK);
   gfx->setTextSize(2);
-  const char *ok = HELP_OK[lang];
-  gfx->setCursor(154 + (158 - (int)strlen(ok) * 12) / 2, 412);
-  gfx->print(ok);
-  if (helpPage + 1 < HELP_PAGE_COUNT) {
-    gfx->fillRoundRect(336, 398, 82, 42, 12, UI_WHITE);
-    gfx->drawRoundRect(336, 398, 82, 42, 12, UI_INK);
-    gfx->setTextColor(UI_INK);
-    gfx->setCursor(360, 412);
-    gfx->print(">>");
-  }
+  gfx->setCursor(CX - strlen(pg) * 6, 330);
+  gfx->print(pg);
+  // flechas grandes; se sale con PWR
+  setButton(HELP_PREV_X, HELP_NAV_Y, HELP_NAV_W, HELP_NAV_H, "<", helpPage > 0 ? UI_WHITE : UI_TRACK, UI_INK, 3);
+  setButton(HELP_NEXT_X, HELP_NAV_Y, HELP_NAV_W, HELP_NAV_H, ">", helpPage + 1 < HELP_PAGE_COUNT ? UI_WHITE : UI_TRACK, UI_INK, 3);
   flushStampedFrame();
 }
 
@@ -3687,177 +3667,201 @@ void openHelp() {
 }
 
 void helpTap(int16_t x, int16_t y) {
-  if (y >= 392 && y <= 448) {
-    if (x >= 48 && x <= 130 && helpPage > 0) {
-      helpPage--;
-      helpDirty = true;
-      sfxPlay(SFX_MENU);
-      return;
-    }
-    if (x >= 336 && x <= 418 && helpPage + 1 < HELP_PAGE_COUNT) {
-      helpPage++;
-      helpDirty = true;
-      sfxPlay(SFX_MENU);
-      return;
-    }
-    if (x >= 154 && x <= 312) {
-      helpOpen = false;
-      clockOpen = true;
-      clockDirty = true;
-      lockTouchBrief();
-      sfxPlay(SFX_TAP);
-      return;
-    }
+  bool prev = x < CX, next = x >= CX;  // toda la mitad de la pantalla vale como flecha
+  if (y >= HELP_NAV_Y && y < HELP_NAV_Y + HELP_NAV_H) {
+    prev = x >= HELP_PREV_X && x < HELP_PREV_X + HELP_NAV_W;
+    next = x >= HELP_NEXT_X && x < HELP_NEXT_X + HELP_NAV_W;
   }
-  if (x > CX && helpPage + 1 < HELP_PAGE_COUNT) { helpPage++; helpDirty = true; sfxPlay(SFX_MENU); return; }
-  if (x < CX && helpPage > 0) { helpPage--; helpDirty = true; sfxPlay(SFX_MENU); return; }
+  if (next && helpPage + 1 < HELP_PAGE_COUNT) { helpPage++; helpDirty = true; sfxPlay(SFX_MENU); }
+  else if (prev && helpPage > 0) { helpPage--; helpDirty = true; sfxPlay(SFX_MENU); }
+}
+
+// ---------- ajustes: menu de paginas con botones grandes ----------
+#define SET_ITEM_X 83
+#define SET_ITEM_W 300
+#define SET_ITEM_H 46
+#define SET_ITEM_Y0 80
+#define SET_ITEM_STEP 52
+#define SET_ITEMS 6
+#define SET_BIG_X 83
+#define SET_BIG_W 300
+#define SET_BIG_H 56
+
+static void setButton(int x, int y, int w, int h, const char *label, uint16_t fill, uint16_t ink, uint8_t size) {
+  gfx->fillRoundRect(x, y, w, h, 14, fill);
+  gfx->drawRoundRect(x, y, w, h, 14, UI_INK);
+  gfx->setTextSize(size);
+  gfx->setTextColor(ink);
+  int cw = 6 * size;
+  char buf[40];
+  snprintf(buf, sizeof(buf), "%.*s", (w - 8) / cw, label);
+  gfx->setCursor(x + (w - (int)strlen(buf) * cw) / 2, y + (h - 8 * size) / 2 + 1);
+  gfx->print(buf);
+}
+
+static void setTitle(const char *t, uint8_t size, int y) {
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(size);
+  gfx->setCursor(CX - (int)strlen(t) * 3 * size, y);
+  gfx->print(t);
+}
+
+static const char *settingsItemLabel(uint8_t i, char *buf, size_t len) {
+  switch (i) {
+    case 0: return T(S_SET_TIME);
+    case 1: return T(S_SET_SOUNDSCREEN);
+    case 2: return T(S_WIFI);
+    case 3: snprintf(buf, len, "%s%s", T(S_UPDATE), otaUpdateAvailable() ? " !" : ""); return buf;
+    case 4: return HELP_WORD[gLang < LANG_COUNT ? gLang : LANG_EN];
+    default: return "INFO";
+  }
+}
+
+static void renderSettingsMenu() {
+  setTitle(T(S_SETTINGS), 3, 34);
+  char buf[24];
+  for (uint8_t i = 0; i < SET_ITEMS; i++) {
+    bool hot = i == 3 && otaUpdateAvailable();
+    setButton(SET_ITEM_X, SET_ITEM_Y0 + i * SET_ITEM_STEP, SET_ITEM_W, SET_ITEM_H,
+              settingsItemLabel(i, buf, sizeof(buf)), hot ? UI_BAR_WARN : UI_WHITE, UI_INK, 2);
+  }
+}
+
+static void renderSettingsTime() {
+  setTitle(T(S_SET_TIME), 2, 40);
+  char t[8];
+  snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(7);
+  gfx->setCursor(CX - 105, 84);
+  gfx->print(t);
+  drawClockBtn(104, 166, "-");  // hora -
+  drawClockBtn(170, 166, "+");  // hora +
+  drawClockBtn(252, 166, "-");  // min -
+  drawClockBtn(318, 166, "+");  // min +
+  gfx->setTextSize(2);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setCursor(120, 232);
+  gfx->print(T(S_HOUR));
+  gfx->setCursor(276, 232);
+  gfx->print(T(S_MIN));
+  // con la hora de internet activa, el ajuste manual se corrige en la siguiente sincronizacion
+  if (netTimeZone() != TZ_OFF) {
+    char sl[48];
+    uint32_t ls = netLastTimeSync();
+    if (ls) snprintf(sl, sizeof(sl), T(S_TZ_SYNCED_FMT), (unsigned)((ls / 3600) % 24), (unsigned)((ls / 60) % 60));
+    else snprintf(sl, sizeof(sl), "%s", T(S_TZ_WAIT));
+    gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(sl) * 3, 262);
+    gfx->print(sl);
+  }
+  setButton(133, 290, 200, SET_BIG_H, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
+}
+
+static void renderSettingsSound() {
+  setTitle(T(S_SET_SOUNDSCREEN), 2, 44);
+  uint8_t snd = audioMode();
+  setButton(SET_BIG_X, 100, SET_BIG_W, SET_BIG_H, soundModeLabel(), snd ? UI_BAR_OK : UI_WHITE, snd ? UI_BG_DAY : UI_INK, 2);
+  setButton(SET_BIG_X, 172, SET_BIG_W, SET_BIG_H, powerSaveLabel(), powerSave ? UI_BAR_WARN : UI_WHITE, UI_INK, 2);
+  char lp[32];
+  snprintf(lp, sizeof(lp), "%s: %s  >", T(S_LANG_LABEL), LANG_CODES[gLang]);
+  setButton(SET_BIG_X, 244, SET_BIG_W, SET_BIG_H, lp, UI_WHITE, UI_INK, 2);
+}
+
+static void renderSettingsInfo() {
+  setTitle("INFO", 3, 40);
+  char l[6][48];
+  snprintf(l[0], sizeof(l[0]), "FW v%s", FW_VERSION);
+  snprintf(l[1], sizeof(l[1]), "SAVE %s", pet.saveLoadedFromNvs ? T(S_OK) : T(S_STATUS_NEW));
+  snprintf(l[2], sizeof(l[2]), "SD %s  SPR %s", sdReady ? "OK" : "NO", (pmd.loaded || mon.loaded) ? T(S_OK) : T(S_STATUS_FLASH_NO));
+  if (pet.isEgg()) snprintf(l[3], sizeof(l[3]), "PET %s", T(S_EGG_HDR));
+  else {
+    char level[12];
+    snprintf(level, sizeof(level), T(S_LEVEL_SHORT_FMT), pet.level());
+    snprintf(l[3], sizeof(l[3]), "PET #%d %s", pet.speciesId, level);
+  }
+  snprintf(l[4], sizeof(l[4]), "SAVE %lums", (unsigned long)gPetLastSaveMs);
+  snprintf(l[5], sizeof(l[5]), "LOOP MAX %lums", (unsigned long)perfLoopMaxMs);
+  for (int i = 0; i < 6; i++) {
+    gfx->setTextColor(i >= 4 ? NET_DIM_INK : UI_INK);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(l[i]) * 6, 100 + i * 36);
+    gfx->print(l[i]);
+  }
 }
 
 void renderClock() {
   clockDirty = false;
   gfx->fillScreen(UI_BG_DAY);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(T(S_SET_TIME)) * 9, 44);
-  gfx->print(T(S_SET_TIME));
-
-  char t[8];
-  snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
-  gfx->setTextSize(7);
-  gfx->setCursor(CX - 105, 108);
-  gfx->print(t);
-
-  drawClockBtn(104, 190, "-");  // hora -
-  drawClockBtn(170, 190, "+");  // hora +
-  drawClockBtn(252, 190, "-");  // min -
-  drawClockBtn(318, 190, "+");  // min +
-  gfx->setTextSize(2);
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(120, 256);
-  gfx->print(T(S_HOUR));
-  gfx->setCursor(276, 256);
-  gfx->print(T(S_MIN));
-
-  // selector de sonido: mucho / medio / poco / apagado
-  uint8_t sndMode = audioMode();
-  const char *sl = soundModeLabel();
-  gfx->fillRoundRect(SOUND_PILL_X, LANG_PILL_Y, SOUND_PILL_W, LANG_PILL_H, 8, sndMode ? UI_BAR_OK : UI_WHITE);
-  gfx->drawRoundRect(SOUND_PILL_X, LANG_PILL_Y, SOUND_PILL_W, LANG_PILL_H, 8, UI_INK);
-  gfx->setTextColor(sndMode ? UI_BG_DAY : UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(SOUND_PILL_X + (SOUND_PILL_W - (int)strlen(sl) * 12) / 2, LANG_PILL_Y + 8);
-  gfx->print(sl);
-
-  // selector de ahorro opcional: apagado por defecto, persistente
-  const char *pl = powerSaveLabel();
-  gfx->fillRoundRect(PSAVE_PILL_X, LANG_PILL_Y, PSAVE_PILL_W, LANG_PILL_H, 8, powerSave ? UI_BAR_WARN : UI_WHITE);
-  gfx->drawRoundRect(PSAVE_PILL_X, LANG_PILL_Y, PSAVE_PILL_W, LANG_PILL_H, 8, UI_INK);
-  gfx->setTextColor(powerSave ? UI_BG_DAY : UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(PSAVE_PILL_X + (PSAVE_PILL_W - (int)strlen(pl) * 12) / 2, LANG_PILL_Y + 8);
-  gfx->print(pl);
-
-  // selector de idioma: una pildora que cicla los 6 idiomas al tocar
-  gfx->fillRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_WHITE);
-  gfx->drawRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_INK);
-  char lp[10];
-  snprintf(lp, sizeof(lp), "%s >", LANG_CODES[gLang]);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(LANG_PILL_X + (LANG_PILL_W - (int)strlen(lp) * 12) / 2, LANG_PILL_Y + 8);
-  gfx->print(lp);
-
-  // Wi-Fi y actualizaciones
-  bool upd = otaUpdateAvailable();
-  gfx->fillRoundRect(NET_PILL_X1, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, UI_WHITE);
-  gfx->drawRoundRect(NET_PILL_X1, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, UI_INK);
-  gfx->fillRoundRect(NET_PILL_X2, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, upd ? UI_BAR_WARN : UI_WHITE);
-  gfx->drawRoundRect(NET_PILL_X2, NET_PILL_Y, NET_PILL_W, NET_PILL_H, 8, UI_INK);
-  gfx->setTextSize(2);
-  gfx->setTextColor(UI_INK);
-  const char *wl = T(S_WIFI);
-  gfx->setCursor(NET_PILL_X1 + (NET_PILL_W - (int)strlen(wl) * 12) / 2, NET_PILL_Y + 8);
-  gfx->print(wl);
-  char ul[16];
-  snprintf(ul, sizeof(ul), "%.11s%s", T(S_UPDATE), upd ? "!" : "");
-  gfx->setCursor(NET_PILL_X2 + (NET_PILL_W - (int)strlen(ul) * 12) / 2, NET_PILL_Y + 8);
-  gfx->print(ul);
-
-  char petLine[32];
-  if (pet.isEgg()) snprintf(petLine, sizeof(petLine), "%s", T(S_EGG_HDR));
-  else {
-    char level[12];
-    snprintf(level, sizeof(level), T(S_LEVEL_SHORT_FMT), pet.level());
-    snprintf(petLine, sizeof(petLine), "#%d %s", pet.speciesId, level);
+  switch (setPage) {
+    case SETP_TIME: renderSettingsTime(); break;
+    case SETP_SOUND: renderSettingsSound(); break;
+    case SETP_INFO: renderSettingsInfo(); break;
+    default: renderSettingsMenu(); break;
   }
-  char st1[64], st2[64];
-  snprintf(st1, sizeof(st1), "FW v%s  SAVE %s", FW_VERSION, pet.saveLoadedFromNvs ? T(S_OK) : T(S_STATUS_NEW));
-  snprintf(st2, sizeof(st2), "SD %s  SPR %s  PET %s", sdReady ? "OK" : "NO",
-           (pmd.loaded || mon.loaded) ? T(S_OK) : T(S_STATUS_FLASH_NO), petLine);
-  // diagnostica: ultimo guardado y bucle mas lento de los ultimos minutos
-  char st3[48];
-  snprintf(st3, sizeof(st3), "SAVE %lums  LOOP MAX %lums", (unsigned long)gPetLastSaveMs, (unsigned long)perfLoopMaxMs);
-  gfx->setTextSize(1);
-  gfx->setTextColor(UI_INK);
-  gfx->setCursor(CX - (int)strlen(st1) * 3, 372);
-  gfx->print(st1);
-  gfx->setCursor(CX - (int)strlen(st2) * 3, 386);
-  gfx->print(st2);
-  gfx->setTextColor(NET_DIM_INK);
-  gfx->setCursor(CX - (int)strlen(st3) * 3, 396);
-  gfx->print(st3);
-
-  gfx->fillRoundRect(96, 404, 110, 40, 13, UI_WHITE);
-  gfx->drawRoundRect(96, 404, 110, 40, 13, UI_INK);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  const char *hw = HELP_WORD[gLang];
-  gfx->setCursor(96 + (110 - (int)strlen(hw) * 12) / 2, 417);
-  gfx->print(hw);
-
-  gfx->fillRoundRect(230, 404, 156, 40, 13, UI_BAR_OK);
-  gfx->setTextColor(UI_BG_DAY);
-  gfx->setTextSize(3);
-  gfx->setCursor(230 + (156 - 36) / 2, 414);
-  gfx->print(T(S_OK));
   flushStampedFrame();
 }
 
+static void openSettingsPage(uint8_t page) {
+  if (page == SETP_TIME) {
+    uint32_t e = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
+    clockH = (e / 3600) % 24;
+    clockM = (e / 60) % 60;
+  }
+  setPage = page;
+  clockDirty = true;
+  lockTouchBrief();
+  sfxPlay(SFX_MENU);
+}
+
 void clockTap(int16_t x, int16_t y) {
-  if (y >= 190 && y <= 248) {  // fila de botones +/-
-    if (x >= 104 && x < 162) clockH = (clockH + 23) % 24;
-    else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
-    else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
-    else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
-    clockDirty = true;
-    return;
-  }
-  if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {
-    if (x >= SOUND_PILL_X && x < SOUND_PILL_X + SOUND_PILL_W) {
-      audioSetMode(nextSoundMode());
-      clockDirty = true;
-      if (audioEnabled()) sfxPlay(SFX_LEVEL);  // confirma el nuevo modo si no esta apagado
+  switch (setPage) {
+    case SETP_MENU: {
+      if (x < SET_ITEM_X || x >= SET_ITEM_X + SET_ITEM_W || y < SET_ITEM_Y0) return;
+      int i = (y - SET_ITEM_Y0) / SET_ITEM_STEP;
+      if (i >= SET_ITEMS || y > SET_ITEM_Y0 + i * SET_ITEM_STEP + SET_ITEM_H + 3) return;
+      switch (i) {
+        case 0: openSettingsPage(SETP_TIME); break;
+        case 1: openSettingsPage(SETP_SOUND); break;
+        case 2: openNet(NETP_WIFI); break;
+        case 3: openNet(NETP_UPDATE); break;
+        case 4: openHelp(); break;
+        default: openSettingsPage(SETP_INFO); break;
+      }
       return;
     }
-    if (x >= PSAVE_PILL_X && x < PSAVE_PILL_X + PSAVE_PILL_W) {
-      setPowerSave(!powerSave);
-      clockDirty = true;
-      sfxPlay(powerSave ? SFX_MENU : SFX_TAP);
+    case SETP_TIME:
+      if (y >= 166 && y <= 224) {  // fila de botones +/-
+        if (x >= 104 && x < 162) clockH = (clockH + 23) % 24;
+        else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
+        else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
+        else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
+        else return;
+        clockDirty = true;
+        sfxPlay(SFX_TAP);
+        return;
+      }
+      if (x >= 133 && x < 333 && y >= 290 && y < 290 + SET_BIG_H) { applyClock(); sfxPlay(SFX_MENU); }
       return;
-    }
-    if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma
-      setLang((Lang)((gLang + 1) % LANG_COUNT));
-      clockDirty = true;
-      sfxPlay(SFX_TAP);
+    case SETP_SOUND:
+      if (x < SET_BIG_X || x >= SET_BIG_X + SET_BIG_W) return;
+      if (y >= 100 && y < 100 + SET_BIG_H) {
+        audioSetMode(nextSoundMode());
+        clockDirty = true;
+        if (audioEnabled()) sfxPlay(SFX_LEVEL);  // confirma el nuevo modo si no esta apagado
+      } else if (y >= 172 && y < 172 + SET_BIG_H) {
+        setPowerSave(!powerSave);
+        clockDirty = true;
+        sfxPlay(powerSave ? SFX_MENU : SFX_TAP);
+      } else if (y >= 244 && y < 244 + SET_BIG_H) {
+        setLang((Lang)((gLang + 1) % LANG_COUNT));
+        clockDirty = true;
+        sfxPlay(SFX_TAP);
+      }
       return;
-    }
+    default:
+      return;
   }
-  if (y >= NET_PILL_Y && y < NET_PILL_Y + NET_PILL_H) {
-    if (x >= NET_PILL_X1 && x < NET_PILL_X1 + NET_PILL_W) { openNet(NETP_WIFI); return; }
-    if (x >= NET_PILL_X2 && x < NET_PILL_X2 + NET_PILL_W) { openNet(NETP_UPDATE); return; }
-  }
-  if (y >= 404 && y <= 444 && x >= 96 && x <= 206) { openHelp(); return; }
-  if (y >= 404 && y <= 444 && x >= 230 && x <= 386) { applyClock(); return; }
 }
 
 // ---------- Wi-Fi y actualizaciones (desde la pantalla de ajustes) ----------
@@ -3865,11 +3869,15 @@ void clockTap(int16_t x, int16_t y) {
 // las comprobaciones de "pantalla de ajustes abierta" siguen valiendo.
 
 #define NET_DIM 0x8410
-#define NET_ROWS_SAVED 4
-#define NET_ROW0_Y 200
-#define NET_ROW_STEP 41
-#define NET_TZ_Y 140
-#define NET_ROWS_SCAN 6
+#define NET_ROWS_SAVED 3
+#define NET_ROW0_Y 214
+#define NET_ROW_STEP 49
+#define NET_ROW_H 44
+#define NET_TZ_Y 142
+#define NET_TOP_Y 90
+#define NET_ROWS_SCAN 5
+#define NET_SCAN_Y0 84
+#define NET_NAV_Y 336
 
 static const char *const PW_KEYS[3][4] = {
   { "1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm._@" },
@@ -3980,23 +3988,23 @@ static void renderNetWifi() {
     case JOIN_FAILED: snprintf(line, sizeof(line), "%s", T(S_NET_JOIN_FAIL)); col = UI_BAR_BAD; break;
     default: snprintf(line, sizeof(line), T(S_NET_SAVED_FMT), (unsigned)l.count, (unsigned)NET_MAX); break;
   }
-  netText(70, line, col, 2);
+  netText(64, line, col, 2);
 
   bool on = netAutoCheck();
-  netPill(66, 98, 160, 34, on ? T(S_NET_AUTO_ON) : T(S_NET_AUTO_OFF), on ? UI_BAR_OK : UI_WHITE, on ? UI_BG_DAY : UI_INK, 2);
-  netPill(240, 98, 160, 34, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
+  netPill(66, NET_TOP_Y, 160, 44, on ? T(S_NET_AUTO_ON) : T(S_NET_AUTO_OFF), on ? UI_BAR_OK : UI_WHITE, on ? UI_BG_DAY : UI_INK, 2);
+  netPill(240, NET_TOP_Y, 160, 44, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
   // fuso orario: toque a la izquierda = anterior, a la derecha = siguiente
   uint8_t tz = netTimeZone();
   char tzl[32];
   snprintf(tzl, sizeof(tzl), "<  %s  >", tz == TZ_OFF ? T(S_TZ_MANUAL) : TZ_ZONES[tz].label);
-  netPill(66, NET_TZ_Y, 334, 32, tzl, UI_WHITE, UI_INK, 2);
+  netPill(66, NET_TZ_Y, 334, 44, tzl, UI_WHITE, UI_INK, 2);
   char syncLine[48];
   uint32_t ls = netLastTimeSync();
   if (tz == TZ_OFF) snprintf(syncLine, sizeof(syncLine), "%s", T(S_NET_AUTO_HINT));
   else if (ls) snprintf(syncLine, sizeof(syncLine), T(S_TZ_SYNCED_FMT), (unsigned)((ls / 3600) % 24), (unsigned)((ls / 60) % 60));
   else snprintf(syncLine, sizeof(syncLine), "%s", T(S_TZ_WAIT));
-  netText(178, syncLine, NET_DIM, 1);
-  if (tz != TZ_OFF) netText(188, T(S_NET_AUTO_HINT), NET_DIM, 1);
+  netText(191, syncLine, NET_DIM, 1);
+  if (tz != TZ_OFF) netText(201, T(S_NET_AUTO_HINT), NET_DIM, 1);
 
   int order[NET_MAX];
   int n = netListOrder(l, order);
@@ -4012,37 +4020,35 @@ static void renderNetWifi() {
     int idx = order[k];
     int y = NET_ROW0_Y + r * NET_ROW_STEP;
     bool pending = netForgetIdx == idx;
-    gfx->fillRoundRect(58, y, 350, 38, 9, UI_WHITE);
-    gfx->drawRoundRect(58, y, 350, 38, 9, pending ? UI_BAR_BAD : UI_INK);
+    gfx->fillRoundRect(58, y, 350, NET_ROW_H, 10, UI_WHITE);
+    gfx->drawRoundRect(58, y, 350, NET_ROW_H, 10, pending ? UI_BAR_BAD : UI_INK);
     gfx->setTextSize(2);
     gfx->setTextColor(pending ? UI_BAR_BAD : (k == 0 ? UI_BAR_OK : UI_INK));
-    gfx->setCursor(70, y + 11);
+    gfx->setCursor(70, y + 15);
     char s[24];
     snprintf(s, sizeof(s), "%.22s", pending ? T(S_NET_FORGET_Q) : l.e[idx].ssid);
     gfx->print(s);
-    gfx->fillRoundRect(362, y + 4, 40, 30, 8, pending ? UI_BAR_BAD : UI_TRACK);
+    gfx->fillRoundRect(348, y + 4, 54, NET_ROW_H - 8, 8, pending ? UI_BAR_BAD : UI_TRACK);
     gfx->setTextColor(pending ? UI_WHITE : UI_INK);
-    gfx->setCursor(376, y + 11);
+    gfx->setCursor(369, y + 15);
     gfx->print("X");
   }
   if (pages > 1) {
-    netPill(96, 366, 50, 28, "<", netListPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
-    netPill(320, 366, 50, 28, ">", netListPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
+    netPill(100, 366, 64, 44, "<", netListPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
+    netPill(302, 366, 64, 44, ">", netListPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
     char pg[12];
     snprintf(pg, sizeof(pg), "%u/%u", (unsigned)(netListPage + 1), (unsigned)pages);
-    netText(372, pg, UI_INK, 2);
+    netText(381, pg, UI_INK, 2);
   }
-  netPill(163, 404, 140, 40, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
 }
 
 static void netWifiTap(int16_t x, int16_t y) {
-  if (inBox(x, y, 163, 404, 140, 40)) { closeNet(); return; }
-  if (inBox(x, y, 66, 98, 160, 34)) {
+  if (inBox(x, y, 66, NET_TOP_Y, 160, 44)) {
     netSetAutoCheck(!netAutoCheck());
     sfxPlay(SFX_TAP);
     return;
   }
-  if (inBox(x, y, 66, NET_TZ_Y, 334, 32)) {
+  if (inBox(x, y, 66, NET_TZ_Y, 334, 44)) {
     uint8_t tz = netTimeZone();
     tz = x < CX ? (tz + TZ_COUNT - 1) % TZ_COUNT : (tz + 1) % TZ_COUNT;
     netSetTimeZone(tz);
@@ -4050,7 +4056,7 @@ static void netWifiTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  if (inBox(x, y, 240, 98, 160, 34)) {
+  if (inBox(x, y, 240, NET_TOP_Y, 160, 44)) {
     if (netBusy()) { sfxPlay(SFX_DENY); return; }
     netClearJoin();
     netPage = NETP_SCAN;
@@ -4064,9 +4070,9 @@ static void netWifiTap(int16_t x, int16_t y) {
   int order[NET_MAX];
   int n = netListOrder(l, order);
   int pages = (n + NET_ROWS_SAVED - 1) / NET_ROWS_SAVED;
-  if (pages > 1 && y >= 366 && y < 394) {
-    if (x >= 96 && x < 146 && netListPage > 0) { netListPage--; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
-    if (x >= 320 && x < 370 && netListPage + 1 < pages) { netListPage++; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
+  if (pages > 1 && y >= 366 && y < 410) {
+    if (x >= 100 && x < 164 && netListPage > 0) { netListPage--; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
+    if (x >= 302 && x < 366 && netListPage + 1 < pages) { netListPage++; netForgetIdx = -1; netDirty = true; sfxPlay(SFX_MENU); }
     return;
   }
   for (int r = 0; r < NET_ROWS_SAVED; r++) {
@@ -4074,9 +4080,9 @@ static void netWifiTap(int16_t x, int16_t y) {
     if (k >= n) break;
     int idx = order[k];
     int ry = NET_ROW0_Y + r * NET_ROW_STEP;
-    if (!inBox(x, y, 58, ry, 350, 38)) continue;
+    if (!inBox(x, y, 58, ry, 350, NET_ROW_H)) continue;
     if (netBusy()) { sfxPlay(SFX_DENY); return; }
-    if (x >= 352) {  // X: primer toque pide confirmacion, el segundo borra
+    if (x >= 340) {  // X: primer toque pide confirmacion, el segundo borra
       if (netForgetIdx == idx) {
         netForget(idx);
         netForgetIdx = -1;
@@ -4096,11 +4102,11 @@ static void netWifiTap(int16_t x, int16_t y) {
 }
 
 static void renderNetScan() {
-  netText(30, T(S_NET_NETWORKS), UI_INK, 3);
+  netText(26, T(S_NET_NETWORKS), UI_INK, 3);
   NetScanStatus st = netScanStatus();
   int n = netScanCount();
-  if (st == SCAN_BUSY) netText(66, T(S_NET_SCANNING), UI_BAR_WARN, 2);
-  else if (n == 0) netText(66, T(S_NET_NOTFOUND), UI_BAR_BAD, 2);
+  if (st == SCAN_BUSY) netText(58, T(S_NET_SCANNING), UI_BAR_WARN, 2);
+  else if (n == 0) netText(58, T(S_NET_NOTFOUND), UI_BAR_BAD, 2);
   int pages = (n + NET_ROWS_SCAN - 1) / NET_ROWS_SCAN;
   if (netScanPage >= pages) netScanPage = pages ? pages - 1 : 0;
   if (st != SCAN_BUSY) {
@@ -4108,38 +4114,36 @@ static void renderNetScan() {
       int k = netScanPage * NET_ROWS_SCAN + r;
       if (k >= n) break;
       const NetScanItem &it = netScanItem(k);
-      int y = 94 + r * 42;
-      gfx->fillRoundRect(58, y, 350, 38, 9, UI_WHITE);
-      gfx->drawRoundRect(58, y, 350, 38, 9, UI_INK);
+      int y = NET_SCAN_Y0 + r * NET_ROW_STEP;
+      gfx->fillRoundRect(58, y, 350, NET_ROW_H, 10, UI_WHITE);
+      gfx->drawRoundRect(58, y, 350, NET_ROW_H, 10, UI_INK);
       gfx->setTextSize(2);
       gfx->setTextColor(it.saved ? UI_BAR_OK : UI_INK);
-      gfx->setCursor(68, y + 11);
+      gfx->setCursor(68, y + 15);
       char s[24];
       snprintf(s, sizeof(s), "%.20s", it.ssid);
       gfx->print(s);
       if (it.open) {  // red abierta: sin contrasena
         gfx->setTextSize(1);
         gfx->setTextColor(NET_DIM);
-        gfx->setCursor(320, y + 15);
+        gfx->setCursor(320, y + 19);
         gfx->print("OPEN");
       }
-      netBars(372, y + 9, it.rssi, it.saved ? UI_BAR_OK : UI_INK);
+      netBars(372, y + 12, it.rssi, it.saved ? UI_BAR_OK : UI_INK);
     }
   }
-  netPill(80, 354, 56, 34, "<", netScanPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
-  netPill(156, 354, 154, 34, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
-  netPill(330, 354, 56, 34, ">", netScanPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
-  netPill(163, 404, 140, 40, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
+  netPill(86, NET_NAV_Y, 64, 44, "<", netScanPage ? UI_WHITE : UI_TRACK, UI_INK, 2);
+  netPill(160, NET_NAV_Y, 146, 44, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
+  netPill(316, NET_NAV_Y, 64, 44, ">", netScanPage + 1 < pages ? UI_WHITE : UI_TRACK, UI_INK, 2);
 }
 
 static void netScanTap(int16_t x, int16_t y) {
-  if (inBox(x, y, 163, 404, 140, 40)) { closeNet(); return; }
   int n = netScanCount();
   int pages = (n + NET_ROWS_SCAN - 1) / NET_ROWS_SCAN;
-  if (y >= 354 && y < 388) {
-    if (x >= 80 && x < 136 && netScanPage > 0) { netScanPage--; netDirty = true; sfxPlay(SFX_MENU); }
-    else if (x >= 330 && x < 386 && netScanPage + 1 < pages) { netScanPage++; netDirty = true; sfxPlay(SFX_MENU); }
-    else if (x >= 156 && x < 310) {
+  if (y >= NET_NAV_Y && y < NET_NAV_Y + 44) {
+    if (x >= 86 && x < 150 && netScanPage > 0) { netScanPage--; netDirty = true; sfxPlay(SFX_MENU); }
+    else if (x >= 316 && x < 380 && netScanPage + 1 < pages) { netScanPage++; netDirty = true; sfxPlay(SFX_MENU); }
+    else if (x >= 160 && x < 306) {
       if (netStartScan()) { netScanPage = 0; sfxPlay(SFX_MENU); }
       else sfxPlay(SFX_DENY);
     }
@@ -4149,7 +4153,7 @@ static void netScanTap(int16_t x, int16_t y) {
   for (int r = 0; r < NET_ROWS_SCAN; r++) {
     int k = netScanPage * NET_ROWS_SCAN + r;
     if (k >= n) break;
-    if (!inBox(x, y, 58, 94 + r * 42, 350, 38)) continue;
+    if (!inBox(x, y, 58, NET_SCAN_Y0 + r * NET_ROW_STEP, 350, NET_ROW_H)) continue;
     const NetScanItem &it = netScanItem(k);
     if (it.open) {  // sin contrasena: probar directamente
       netStartJoin(it.ssid, "");
@@ -4194,11 +4198,9 @@ static void renderNetPass() {
   netPill(181, PW_BOT_Y, 104, PW_BOT_H, "___", UI_WHITE, UI_INK, 2);
   netPill(289, PW_BOT_Y, 60, PW_BOT_H, "<-", UI_BAR_WARN, UI_INK, 2);
   netPill(353, PW_BOT_Y, 60, PW_BOT_H, "OK", UI_BAR_OK, UI_BG_DAY, 2);
-  netPill(173, 378, 120, 40, "X", UI_TRACK, UI_INK, 2);
 }
 
 static void netPassTap(int16_t x, int16_t y) {
-  if (inBox(x, y, 173, 378, 120, 40)) { closeNet(); return; }
   if (y >= PW_Y && y < PW_Y + 4 * PW_KH && x >= PW_X && x < PW_X + 10 * PW_KW) {
     char ch = PW_KEYS[pwMode][(y - PW_Y) / PW_KH][(x - PW_X) / PW_KW];
     if (ch == ' ') return;
@@ -4298,12 +4300,9 @@ static void renderNetUpdate() {
   if (a == 1) netPill(123, 280, 220, 48, T(S_UPD_CHECK), UI_WHITE, UI_INK, 2);
   else if (a == 2) netPill(123, 280, 220, 48, T(S_UPD_INSTALL), UI_BAR_OK, UI_BG_DAY, 2);
   else if (a == 3) netPill(123, 280, 220, 48, T(S_WIFI), UI_BAR_WARN, UI_INK, 2);
-  if (s != OTA_SPRITES && s != OTA_FIRMWARE && s != OTA_REBOOT)
-    netPill(163, 404, 140, 40, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
 }
 
 static void netUpdateTap(int16_t x, int16_t y) {
-  if (inBox(x, y, 163, 404, 140, 40)) { closeNet(); return; }
   if (!inBox(x, y, 123, 280, 220, 48)) return;
   switch (netUpdateAction()) {
     case 1: if (otaStartCheck(true)) sfxPlay(SFX_MENU); break;

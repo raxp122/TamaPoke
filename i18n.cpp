@@ -31,7 +31,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PROGRESO", "Nv.%u", "%u min para Nv.%u", "EVOLUCION", "Forma final",
     "Listo para evolucionar!", "3/4 >40 para evolucionar",
     "Evoluciona en %u niv.", "Descuidos: %u",
-    "SON TODO", "SON MED", "SON MIN", "SON OFF", "AHORRO ON", "AHORRO OFF",
+    "SONIDO: TODO", "SONIDO: MEDIO", "SONIDO: BAJO", "SONIDO: NO", "AHORRO: SI", "AHORRO: NO",
     "EVOLUCIONAR", "%s quiere decirte algo...", "%s se siente abandonado...",
     "Evolucionar?", "Mantener forma", "Despedirse?", "Despedirse", "Quedaros juntos",
     "Elige tu region", "Elige tu inicial",
@@ -73,6 +73,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sin redes guardadas", "Toca BUSCAR para anadir", "REDES", "Buscando...", "No hay redes", "Conectando...", "Conectado y guardado", "Contrasena incorrecta?", "Red fuera de alcance", "Conexion fallida", "CONTRASENA", "Olvidar? toca X",
     "Instalada v%s", "Disponible v%s", "BUSCAR", "INSTALAR", "Comprobando...", "Al dia", "Actualizacion lista!", "Actualizacion!", "Reiniciando...", "Sprites actualizados", "No apagues ni desconectes", "Sin Wi-Fi guardada cerca", "Descarga fallida", "Sin version publicada", "Archivo danado, reintenta", "Error de microSD", "microSD llena", "Error al escribir flash", "Primero anade una red Wi-Fi",
     "Hora manual", "Hora de internet %02u:%02u", "Hora de internet: esperando",
+    "AJUSTES", "SONIDO Y PANTALLA",
   },
   // ---------------- EN ----------------
   {
@@ -97,7 +98,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PROGRESS", "Lv.%u", "%u min to Lv.%u", "EVOLUTION", "Final form",
     "Ready to evolve!", "3/4 needs >40 to evolve",
     "Evolves in %u lv.", "Slip-ups: %u",
-    "SND ALL", "SND MID", "SND LOW", "SND OFF", "SAVE ON", "SAVE OFF",
+    "SOUND: FULL", "SOUND: MEDIUM", "SOUND: LOW", "SOUND: OFF", "POWER SAVING: ON", "POWER SAVING: OFF",
     "EVOLVE!", "%s wants to tell you...", "%s feels abandoned...",
     "Evolve?", "Keep form", "Say goodbye?", "Goodbye", "Stay together",
     "Choose your region", "Choose your starter",
@@ -139,6 +140,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "No saved networks", "Tap SEARCH to add one", "NETWORKS", "Searching...", "No networks found", "Connecting...", "Connected and saved", "Wrong password?", "Network not in range", "Connection failed", "PASSWORD", "Forget? tap X",
     "Installed v%s", "Available v%s", "CHECK", "INSTALL", "Checking...", "Up to date", "Update available!", "Update ready!", "Restarting...", "Sprites updated", "Keep it on, do not unplug", "No saved Wi-Fi in range", "Download failed", "No release published", "Corrupted file, retry", "microSD error", "microSD full", "Flash write failed", "Add a Wi-Fi network first",
     "Manual clock", "Internet time %02u:%02u", "Internet time: waiting",
+    "SETTINGS", "SOUND & SCREEN",
   },
   // ---------------- FR ----------------
   {
@@ -163,7 +165,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PROGRES", "Niv.%u", "%u min pour Niv.%u", "EVOLUTION", "Forme finale",
     "Pret a evoluer!", "3/4 >40 pour evoluer",
     "Evolue dans %u niv.", "Negligences: %u",
-    "SON MAX", "SON MOY", "SON MIN", "SON OFF", "ECO ON", "ECO OFF",
+    "SON: TOUT", "SON: MOYEN", "SON: BAS", "SON: NON", "ECO ENERGIE: OUI", "ECO ENERGIE: NON",
     "EVOLUER", "%s veut te parler...", "%s se sent abandonne...",
     "Evoluer?", "Garder forme", "Dire adieu?", "Adieu", "Rester ensemble",
     "Choisis ta region", "Choisis ton starter",
@@ -205,6 +207,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Aucun reseau enregistre", "Touche CHERCHER pour ajouter", "RESEAUX", "Recherche...", "Aucun reseau trouve", "Connexion...", "Connecte et enregistre", "Mot de passe faux?", "Reseau hors portee", "Connexion echouee", "MOT DE PASSE", "Oublier? touche X",
     "Installee v%s", "Disponible v%s", "VERIFIER", "INSTALLER", "Verification...", "A jour", "Mise a jour dispo!", "Mise a jour!", "Redemarrage...", "Sprites a jour", "Ne pas eteindre ni debrancher", "Aucun Wi-Fi connu proche", "Echec du telechargement", "Aucune version publiee", "Fichier corrompu, reessaie", "Erreur microSD", "microSD pleine", "Echec ecriture flash", "Ajoute d'abord un Wi-Fi",
     "Heure manuelle", "Heure internet %02u:%02u", "Heure internet: en attente",
+    "REGLAGES", "SON ET ECRAN",
   },
   // ---------------- DE ----------------
   {
@@ -229,7 +232,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "FORTSCHRITT", "Lv.%u", "%u min bis Lv.%u", "ENTWICKLUNG", "Endform",
     "Bereit zur Entwicklung!", "3/4 Werte >40 zur Entwicklung",
     "Entwickelt in %u Lv.", "Patzer: %u",
-    "TON VIEL", "TON MIT", "TON WEN", "TON AUS", "SPAREN AN", "SPAREN AUS",
+    "TON: VOLL", "TON: MITTEL", "TON: LEISE", "TON: AUS", "STROMSPAREN: AN", "STROMSPAREN: AUS",
     "ENTWICKELN", "%s will dir etwas sagen...", "%s fuehlt sich verlassen...",
     "Entwickeln?", "Form behalten", "Abschied?", "Lebwohl", "Zusammen bleiben",
     "Region waehlen", "Starter waehlen",
@@ -271,6 +274,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Keine Netze gespeichert", "SUCHEN tippen zum Hinzufuegen", "NETZE", "Suche...", "Keine Netze gefunden", "Verbinde...", "Verbunden, gespeichert", "Falsches Passwort?", "Netz nicht in Reichweite", "Verbindung fehlgeschlagen", "PASSWORT", "Vergessen? X tippen",
     "Installiert v%s", "Verfuegbar v%s", "PRUEFEN", "INSTALLIEREN", "Pruefe...", "Aktuell", "Update verfuegbar!", "Update da!", "Neustart...", "Sprites aktualisiert", "Nicht ausschalten/abziehen", "Kein bekanntes WLAN da", "Download fehlgeschlagen", "Kein Release vorhanden", "Datei defekt, nochmal", "microSD-Fehler", "microSD voll", "Flash-Schreibfehler", "Zuerst ein WLAN hinzufuegen",
     "Uhr manuell", "Internetzeit %02u:%02u", "Internetzeit: wartet",
+    "EINSTELLUNGEN", "TON & ANZEIGE",
   },
   // ---------------- IT ----------------
   {
@@ -295,7 +299,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PROGRESSI", "Lv.%u", "%u min per Lv.%u", "EVOLUZIONE", "Forma finale",
     "Pronto a evolvere!", "3/4 >40 per evolvere",
     "Evolve tra %u liv.", "Disattenzioni: %u",
-    "AUD MAX", "AUD MED", "AUD MIN", "AUD OFF", "RISPARM ON", "RISPARM OFF",
+    "SUONO: TUTTO", "SUONO: MEDIO", "SUONO: BASSO", "SUONO: NO", "RISPARMIO: SI", "RISPARMIO: NO",
     "EVOLVI", "%s vuole dirti qualcosa...", "%s si sente abbandonato...",
     "Evolvere?", "Mantieni forma", "Salutare?", "Addio", "Restare insieme",
     "Scegli la regione", "Scegli l'iniziale",
@@ -337,6 +341,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Nessuna rete salvata", "Tocca CERCA per aggiungerne", "RETI", "Ricerca...", "Nessuna rete trovata", "Connessione...", "Connesso e salvato", "Password errata?", "Rete non raggiungibile", "Connessione fallita", "PASSWORD", "Dimenticare? tocca X",
     "Installata v%s", "Disponibile v%s", "CONTROLLA", "INSTALLA", "Controllo...", "Gia aggiornato", "Aggiornamento pronto!", "Aggiornamento!", "Riavvio...", "Sprite aggiornati", "Non spegnere, non scollegare", "Nessuna rete salvata vicina", "Download non riuscito", "Nessuna release pubblicata", "File corrotto, riprova", "Errore microSD", "microSD piena", "Scrittura flash fallita", "Prima aggiungi una rete Wi-Fi",
     "Ora manuale", "Ora da internet %02u:%02u", "Ora da internet: in attesa",
+    "IMPOSTAZIONI", "SUONO E SCHERMO",
   },
   // ---------------- PT ----------------
   {
@@ -361,7 +366,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PROGRESSO", "Niv.%u", "%u min para Niv.%u", "EVOLUCAO", "Forma final",
     "Pronto a evoluir!", "3/4 >40 para evoluir",
     "Evolui em %u niv.", "Descuidos: %u",
-    "SOM MAX", "SOM MED", "SOM MIN", "SOM OFF", "POUPA ON", "POUPA OFF",
+    "SOM: TUDO", "SOM: MEDIO", "SOM: BAIXO", "SOM: NAO", "POUPANCA: SIM", "POUPANCA: NAO",
     "EVOLUIR", "%s quer dizer-te algo...", "%s sente-se abandonado...",
     "Evoluir?", "Manter forma", "Despedir?", "Adeus", "Ficar juntos",
     "Escolhe a regiao", "Escolhe o inicial",
@@ -403,6 +408,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Nenhuma rede salva", "Toque PROCURAR para juntar", "REDES", "Procurando...", "Nenhuma rede encontrada", "Conectando...", "Conectado e salvo", "Senha errada?", "Rede fora de alcance", "Falha na conexao", "SENHA", "Esquecer? toque X",
     "Instalada v%s", "Disponivel v%s", "VERIFICAR", "INSTALAR", "Verificando...", "Atualizado", "Atualizacao pronta!", "Atualizacao!", "Reiniciando...", "Sprites atualizados", "Nao desligue nem desconecte", "Sem Wi-Fi salvo por perto", "Falha no download", "Nenhuma versao publicada", "Arquivo corrompido", "Erro na microSD", "microSD cheia", "Falha ao gravar flash", "Adicione uma rede Wi-Fi",
     "Hora manual", "Hora da internet %02u:%02u", "Hora da internet: aguardando",
+    "AJUSTES", "SOM E TELA",
   },
 };
 
