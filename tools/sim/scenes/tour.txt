@@ -42,22 +42,31 @@ swipe 380 233 90 233
 shot 28_card_steps
 pwr                  # back to the main screen
 shot 29_back_main
-# --- settings
+# --- settings: menu of big buttons (items at y 103, 155, 207, 259, 311, 363)
 swipe 233 100 233 380
 shot 30_settings
-tap 155 350
-shot 31_wifi
-tap 320 115
-shot 32_wifi_scan
+tap 233 103
+shot 30a_settings_time
+pwr
 tap 233 155
+shot 30b_settings_sound
+pwr
+tap 233 363
+shot 30c_settings_info
+pwr
+tap 233 207
+shot 31_wifi
+tap 320 112
+shot 32_wifi_scan
+tap 233 106
 shot 33_wifi_password
 pwr                  # password -> Wi-Fi page
 pwr                  # Wi-Fi page -> settings
-tap 311 350
 ota available
+tap 233 259
 shot 34_update
 pwr
-tap 150 424
+tap 233 311
 shot 35_help
 tap 380 233
 shot 36_help_2

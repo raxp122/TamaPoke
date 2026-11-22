@@ -36,4 +36,21 @@ for a in "$@"; do
   if [[ -f "$a" ]]; then scenes+=("$a"); else scenes+=("tools/sim/$a"); fi
 done
 if [[ ${#scenes[@]} -eq 0 ]]; then scenes=(tools/sim/scenes/*.txt); fi
-"$BUILD/tamapoke-sim" -o tools/sim/out -sd tools/sdcard "${scenes[@]}"
+# every scene starts from a fresh device (new save, empty NVS): one process each
+report=tools/sim/out/layout-report.md
+echo "# Layout report" > "$report"
+echo >> "$report"
+echo "OUTSIDE: text or box drawn beyond the round panel. SMALL: button (outlined rounded box) under 44 px, hard to tap." >> "$report"
+echo >> "$report"
+outside=0; small=0
+for sc in "${scenes[@]}"; do
+  mkdir -p "$BUILD/run"
+  "$BUILD/tamapoke-sim" -o "$BUILD/run" -sd tools/sdcard "$sc" | grep -v '^total'
+  cp "$BUILD"/run/*.png tools/sim/out/ 2>/dev/null || true
+  rm -f "$BUILD"/run/*.png
+  sed -n '/^## /,/^Total:/p' "$BUILD/run/layout-report.md" | grep -v '^Total:' >> "$report"
+  o=$(grep -o 'Total: [0-9]* outside' "$BUILD/run/layout-report.md" | grep -o '[0-9]*'); s=$(grep -o ', [0-9]* small' "$BUILD/run/layout-report.md" | grep -o '[0-9]*')
+  outside=$((outside + ${o:-0})); small=$((small + ${s:-0}))
+done
+echo "Total: $outside outside, $small small" >> "$report"
+echo "total outside=$outside small=$small (report: $report)"

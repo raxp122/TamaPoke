@@ -55,10 +55,11 @@ tap 150 150
 pwr
 pwr
 swipe 233 100 233 380
-tap 180 311
-tap 180 311
-tap 380 311
-tap 380 311
+tap 233 155
+tap 233 128
+tap 233 200
+tap 233 272
+pwr
 pwr
 wait 300000
 shot 90_soak_end
