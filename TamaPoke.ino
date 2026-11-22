@@ -97,6 +97,14 @@ int galleryPage = 0;        // 10 paginas de 16
 int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 uint8_t galleryFilter = 0;  // 0 todos, 1 criados, 2 capturados
 uint8_t galleryRegion = 0;  // 0 all, 1 Kanto, 2 Johto, 3 Hoenn
+// carrusel del detalle: girar el dedo alrededor del centro pasa de Pokemon
+bool galleryRotating = false;   // el carrusel esta visible (dedo girando)
+bool galRotHasAngle = false;
+float galRotLastAngle = 0;
+float galRotAccum = 0;          // radianes acumulados desde el ultimo paso
+int16_t galRotDex = 0;          // Pokemon en el centro del carrusel
+#define GAL_ROT_STEP 0.6f       // ~34 grados por Pokemon
+#define GAL_ROT_START 0.35f     // ~20 grados para empezar (no confundir con un toque)
 
 bool screenOff = false;       // pulsacion corta del boton PWR
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
@@ -513,6 +521,7 @@ uint16_t renderIntervalMs() {
   if (screenOff) return 5000;
   if (battleOpen) return battleResolved ? 320 : 190;
   if (gameOpen || sackOpen) return 115;
+  if (galleryRotating) return 40;  // carrusel: animacion fluida mientras gira el dedo
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
   if (!powerSave) return 100;
   if (dimStage >= 2) return 650;
@@ -1082,6 +1091,8 @@ void handleTouch() {
   }
 
   if (pressed && !wasPressed) {  // empieza el gesto
+    galRotHasAngle = false;
+    galRotAccum = 0;
     tX0 = tXl = x;
     tY0 = tYl = y;
     tStart = millis();
@@ -1100,6 +1111,7 @@ void handleTouch() {
   } else if (pressed) {  // sigue apoyado
     tXl = x;
     tYl = y;
+    if (!swallowGesture && galleryOpen && galleryDetail) galleryRotateDrag(x, y);
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
     if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && !helpOpen && millis() - tStart > 3000 &&
         abs(tXl - tX0) < 30 && abs(tYl - tY0) < 30 && inPetZone(tX0, tY0) &&
@@ -1111,7 +1123,9 @@ void handleTouch() {
     lastInteract = millis();
     int dx = tXl - tX0, dy = tYl - tY0;
     uint32_t dt = millis() - tStart;
-    if (!holdFired && !swallowGesture) {
+    if (galleryRotating) {
+      galleryRotateEnd();  // el carrusel consume el gesto
+    } else if (!holdFired && !swallowGesture) {
       switch (classifyGesture(dx, dy, dt)) {
         case G_SWIPE_RIGHT: onSwipe(1); break;
         case G_SWIPE_LEFT: onSwipe(-1); break;
@@ -1139,6 +1153,7 @@ bool goBack() {
   if (helpOpen) { helpOpen = false; clockOpen = true; setPage = SETP_MENU; clockDirty = true; lockTouchBrief(); return true; }
   if (kbOpen) { kbOpen = false; cardDirty = true; lockTouchBrief(); return true; }  // renombrar: cancelar
   if (galleryOpen) {
+    galleryRotating = false;
     if (galleryDetail) {
       galleryDetail = 0;
       galleryDirty = true;
@@ -5598,8 +5613,21 @@ void keyboardTap(int16_t x, int16_t y) {
 // ---------- galeria pokedex ----------
 
 #define GAL_X 73
-#define GAL_Y 116
+#define GAL_Y 128
 #define GAL_CELL 74
+#define GAL_ROWS 3
+#define GAL_COLS 4
+#define GAL_PER_PAGE (GAL_ROWS * GAL_COLS)
+#define GAL_FILTER_Y 70
+#define GAL_FILTER_H 46
+#define GAL_REGION_X 78
+#define GAL_FILTER_X 238
+#define GAL_FILTER_W 150
+#define GAL_NAV_Y 356
+#define GAL_NAV_H 48
+#define GAL_PREV_X 96
+#define GAL_NEXT_X 280
+#define GAL_NAV_W 90
 
 bool galleryDexVisible(int16_t dex) {
   if (dex < 1 || dex > DEX_COUNT) return false;
@@ -5622,7 +5650,7 @@ uint16_t galleryFilteredCount() {
 
 int galleryPageCount() {
   uint16_t count = galleryFilteredCount();
-  int pages = (count + 15) / 16;
+  int pages = (count + GAL_PER_PAGE - 1) / GAL_PER_PAGE;
   return pages > 0 ? pages : 1;
 }
 
@@ -5652,7 +5680,109 @@ void drawThumb(const uint8_t *b, int x, int y, int s, bool sil) {
   }
 }
 
+// Pokemon visible (con los filtros actuales) a 'steps' posiciones de dex; 0 si no hay
+int16_t galleryNeighbor(int16_t dex, int steps) {
+  int dir = steps > 0 ? 1 : -1;
+  for (int n = steps > 0 ? steps : -steps; n > 0; n--) {
+    int16_t d = dex;
+    do {
+      d += dir;
+      if (d < 1 || d > DEX_COUNT) return 0;
+    } while (!galleryDexVisible(d));
+    dex = d;
+  }
+  return dex;
+}
+
+void galleryRotateDrag(int16_t x, int16_t y) {
+  float dx = x - CX, dy = y - CY;
+  if (dx * dx + dy * dy < 50.0f * 50.0f) { galRotHasAngle = false; return; }  // cerca del centro el angulo no es fiable
+  float a = atan2f(dy, dx);
+  if (!galRotHasAngle) { galRotLastAngle = a; galRotHasAngle = true; return; }
+  float d = a - galRotLastAngle;
+  if (d > (float)PI) d -= 2 * (float)PI;
+  if (d < -(float)PI) d += 2 * (float)PI;
+  galRotLastAngle = a;
+  galRotAccum += d;
+  if (!galleryRotating) {
+    if (fabsf(galRotAccum) < GAL_ROT_START) return;
+    galleryRotating = true;  // empieza el carrusel
+    galRotDex = galleryDetail;
+    galRotAccum = galRotAccum > 0 ? galRotAccum - GAL_ROT_START : galRotAccum + GAL_ROT_START;
+    galleryPmd.unload();
+  }
+  // sentido horario = siguiente, antihorario = anterior; tope en los extremos
+  while (galRotAccum >= GAL_ROT_STEP) {
+    int16_t n = galleryNeighbor(galRotDex, 1);
+    if (!n) { galRotAccum = GAL_ROT_STEP * 0.4f; break; }
+    galRotDex = n;
+    galRotAccum -= GAL_ROT_STEP;
+    sfxPlay(SFX_TAP);
+  }
+  while (galRotAccum <= -GAL_ROT_STEP) {
+    int16_t n = galleryNeighbor(galRotDex, -1);
+    if (!n) { galRotAccum = -GAL_ROT_STEP * 0.4f; break; }
+    galRotDex = n;
+    galRotAccum += GAL_ROT_STEP;
+    sfxPlay(SFX_TAP);
+  }
+  if (galRotAccum > 0 && !galleryNeighbor(galRotDex, 1)) galRotAccum = fminf(galRotAccum, GAL_ROT_STEP * 0.4f);
+  if (galRotAccum < 0 && !galleryNeighbor(galRotDex, -1)) galRotAccum = fmaxf(galRotAccum, -GAL_ROT_STEP * 0.4f);
+}
+
+void galleryRotateEnd() {
+  galleryRotating = false;
+  int16_t pick = galRotDex;
+  if (galRotAccum >= GAL_ROT_STEP / 2) { int16_t n = galleryNeighbor(galRotDex, 1); if (n) pick = n; }
+  else if (galRotAccum <= -GAL_ROT_STEP / 2) { int16_t n = galleryNeighbor(galRotDex, -1); if (n) pick = n; }
+  galRotAccum = 0;
+  galleryDetail = pick;
+  galleryPmd.load(pick, pet.isShinyRegistered(pick));
+  sfxPlay(SFX_MENU);
+  if (pet.isRegistered(pick) || pet.isCaught(pick)) speciesChirpPlay(pick);
+}
+
+// miniatura centrada en (cx, cy)
+void drawThumbAt(const uint8_t *b, int cx, int cy, int s, bool sil) {
+  drawThumb(b, cx - GAL_CELL / 2, cy - GAL_CELL / 2, s, sil);
+}
+
+// carrusel: el Pokemon actual en grande arriba de un arco, vecinos a los lados
+void renderGalleryCarousel() {
+  gfx->fillScreen(UI_BG_DAY);
+  float frac = galRotAccum / GAL_ROT_STEP;  // -1..1 entre pasos
+  const int order[5] = { -2, 2, -1, 1, 0 };  // los lejanos primero, el central encima
+  int16_t center = galRotDex;
+  for (int i = 0; i < 5; i++) {
+    int k = order[i];
+    int16_t dex = k == 0 ? center : galleryNeighbor(center, k);
+    if (!dex) continue;
+    float pos = k - frac;  // 0 = arriba en el centro
+    float th = (270.0f - pos * 40.0f) * (float)PI / 180.0f;
+    int px = (int)lroundf(CX + 170.0f * cosf(th));
+    int py = (int)lroundf(330.0f + 170.0f * sinf(th));
+    float dist = fabsf(pos);
+    int sc = dist < 0.5f ? 4 : (dist < 1.5f ? 3 : 2);
+    const uint8_t *t = thumbs.get(dex);
+    bool known = pet.isRegistered(dex) || pet.isCaught(dex);
+    if (t) drawThumbAt(t, px, py, sc, !known);
+  }
+  // nombre del que quedara elegido al soltar
+  int16_t pick = center;
+  if (frac >= 0.5f) { int16_t n = galleryNeighbor(center, 1); if (n) pick = n; }
+  else if (frac <= -0.5f) { int16_t n = galleryNeighbor(center, -1); if (n) pick = n; }
+  bool known = pet.isRegistered(pick) || pet.isCaught(pick);
+  char head[24];
+  snprintf(head, sizeof(head), "N.%03d %s", pick, known ? dexName(pick) : "???");
+  gfx->setTextColor(known ? DEX_TBL[pick].accent : UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(head) * 6, 346);
+  gfx->print(head);
+  flushStampedFrame();
+}
+
 void renderGallery() {
+  if (galleryDetail && galleryRotating) { renderGalleryCarousel(); return; }
   if (galleryDetail) {  // vista detalle: se redibuja siempre (animada)
     gfx->fillScreen(UI_BG_DAY);
     const DexEntry &d = DEX_TBL[galleryDetail];
@@ -5697,6 +5827,11 @@ void renderGallery() {
       gfx->setCursor(CX - strlen(mark) * 6, reg ? 376 : 366);
       gfx->print(mark);
     }
+    const char *hint = T(S_DEX_ROTATE_HINT);
+    gfx->setTextColor(NET_DIM_INK);
+    gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(hint) * 3, 402);
+    gfx->print(hint);
     flushStampedFrame();
     return;
   }
@@ -5707,49 +5842,37 @@ void renderGallery() {
   gfx->fillScreen(UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - 7 * 9, 28);
+  gfx->setCursor(CX - 7 * 9, 24);
   gfx->print("POKEDEX");
 
   char head[28];
   snprintf(head, sizeof(head), T(S_RAISED_CAUGHT_FMT), pet.registeredCount(), pet.caughtCount());
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(head) * 6, 54);
+  gfx->setTextSize(1);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setCursor(CX - strlen(head) * 3, 56);
   gfx->print(head);
 
+  // dos botones grandes que ciclan: region y filtro (antes 8 chips de 16 px)
   const char *regions[4] = { T(S_FILTER_ALL), "KANTO", "JOHTO", "HOENN" };
   const char *filters[4] = { T(S_FILTER_ALL), T(S_RAISED_MARK), T(S_CAUGHT_MARK), "SHINY" };
-  for (int i = 0; i < 4; i++) {
-    int fx = 73 + i * 80;
-    uint16_t fill = (galleryRegion == i) ? UI_INK : UI_WHITE;
-    uint16_t text = (galleryRegion == i) ? UI_BG_DAY : UI_INK;
-    gfx->fillRoundRect(fx, 68, 76, 16, 5, fill);
-    gfx->drawRoundRect(fx, 68, 76, 16, 5, UI_INK);
-    gfx->setTextColor(text); gfx->setTextSize(1);
-    gfx->setCursor(fx + (76 - (int)strlen(regions[i]) * 6) / 2, 73); gfx->print(regions[i]);
-    fill = (galleryFilter == i) ? UI_INK : UI_WHITE;
-    text = (galleryFilter == i) ? UI_BG_DAY : UI_INK;
-    gfx->fillRoundRect(fx, 88, 76, 16, 5, fill);
-    gfx->drawRoundRect(fx, 88, 76, 16, 5, UI_INK);
-    gfx->setTextColor(text); gfx->setTextSize(1);
-    gfx->setCursor(fx + (76 - (int)strlen(filters[i]) * 6) / 2, 93); gfx->print(filters[i]);
-  }
-/*
-  for (int i = 0; i < 3; i++) {
-    int fx = 74 + i * 106;
-    uint16_t fill = (galleryFilter == i) ? UI_INK : UI_WHITE;
-    uint16_t text = (galleryFilter == i) ? UI_BG_DAY : UI_INK;
-    gfx->fillRoundRect(fx, 74, 96, 18, 6, fill);
-    gfx->drawRoundRect(fx, 74, 96, 18, 6, UI_INK);
-    gfx->setTextColor(text);
-    gfx->setTextSize(1);
-    gfx->setCursor(fx + (96 - (int)strlen(filters[i]) * 6) / 2, 80);
-    gfx->print(filters[i]);
-  }
-*/
+  char rl[24], fl[24];
+  snprintf(rl, sizeof(rl), "%s >", regions[galleryRegion & 3]);
+  snprintf(fl, sizeof(fl), "%s >", filters[galleryFilter & 3]);
+  gfx->fillRoundRect(GAL_REGION_X, GAL_FILTER_Y, GAL_FILTER_W, GAL_FILTER_H, 12, galleryRegion ? 0x4C98 : UI_WHITE);
+  gfx->drawRoundRect(GAL_REGION_X, GAL_FILTER_Y, GAL_FILTER_W, GAL_FILTER_H, 12, UI_INK);
+  gfx->fillRoundRect(GAL_FILTER_X, GAL_FILTER_Y, GAL_FILTER_W, GAL_FILTER_H, 12, galleryFilter ? UI_BAR_WARN : UI_WHITE);
+  gfx->drawRoundRect(GAL_FILTER_X, GAL_FILTER_Y, GAL_FILTER_W, GAL_FILTER_H, 12, UI_INK);
+  gfx->setTextSize(2);
+  gfx->setTextColor(galleryRegion ? UI_WHITE : UI_INK);
+  gfx->setCursor(GAL_REGION_X + (GAL_FILTER_W - (int)strlen(rl) * 12) / 2, GAL_FILTER_Y + 16);
+  gfx->print(rl);
+  gfx->setTextColor(UI_INK);
+  gfx->setCursor(GAL_FILTER_X + (GAL_FILTER_W - (int)strlen(fl) * 12) / 2, GAL_FILTER_Y + 16);
+  gfx->print(fl);
 
-  for (int r = 0; r < 4; r++) {
-    for (int c = 0; c < 4; c++) {
-      int16_t dex = galleryDexAt(galleryPage * 16 + r * 4 + c);
+  for (int r = 0; r < GAL_ROWS; r++) {
+    for (int c = 0; c < GAL_COLS; c++) {
+      int16_t dex = galleryDexAt(galleryPage * GAL_PER_PAGE + r * GAL_COLS + c);
       if (dex <= 0) continue;
       int x = GAL_X + c * GAL_CELL, y = GAL_Y + r * GAL_CELL;
       const uint8_t *t = thumbs.get(dex);
@@ -5779,13 +5902,25 @@ void renderGallery() {
       }
     }
   }
-  // puntos de pagina
+  // paginas: flechas grandes y numero (con 386 Pokemon los puntos no cabian)
   int pages = galleryPageCount();
-  int dotX = CX - (pages - 1) * 7;
-  for (int i = 0; i < pages; i++) {
-    if (i == galleryPage) gfx->fillCircle(dotX + i * 14, 436, 4, UI_INK);
-    else gfx->drawCircle(dotX + i * 14, 436, 3, UI_INK);
-  }
+  gfx->fillRoundRect(GAL_PREV_X, GAL_NAV_Y, GAL_NAV_W, GAL_NAV_H, 12, galleryPage > 0 ? UI_WHITE : UI_BG_DAY);
+  gfx->drawRoundRect(GAL_PREV_X, GAL_NAV_Y, GAL_NAV_W, GAL_NAV_H, 12, galleryPage > 0 ? UI_INK : UI_TRACK);
+  gfx->fillRoundRect(GAL_NEXT_X, GAL_NAV_Y, GAL_NAV_W, GAL_NAV_H, 12, galleryPage + 1 < pages ? UI_WHITE : UI_BG_DAY);
+  gfx->drawRoundRect(GAL_NEXT_X, GAL_NAV_Y, GAL_NAV_W, GAL_NAV_H, 12, galleryPage + 1 < pages ? UI_INK : UI_TRACK);
+  gfx->setTextSize(3);
+  gfx->setTextColor(galleryPage > 0 ? UI_INK : UI_TRACK);
+  gfx->setCursor(GAL_PREV_X + (GAL_NAV_W - 18) / 2, GAL_NAV_Y + 13);
+  gfx->print("<");
+  gfx->setTextColor(galleryPage + 1 < pages ? UI_INK : UI_TRACK);
+  gfx->setCursor(GAL_NEXT_X + (GAL_NAV_W - 18) / 2, GAL_NAV_Y + 13);
+  gfx->print(">");
+  char pg[12];
+  snprintf(pg, sizeof(pg), "%d/%d", galleryPage + 1, pages);
+  gfx->setTextSize(2);
+  gfx->setTextColor(UI_INK);
+  gfx->setCursor(CX - (int)strlen(pg) * 6, GAL_NAV_Y + 16);
+  gfx->print(pg);
   flushStampedFrame();
 }
 
@@ -5794,23 +5929,25 @@ void galleryTap(int16_t x, int16_t y) {
     if (pet.isRegistered(galleryDetail) || pet.isCaught(galleryDetail)) speciesChirpPlay(galleryDetail, true);
     return;
   }
-  if (y >= 68 && y < GAL_Y) {
-    int f = (x - 73) / 80;
-    if (f >= 0 && f < 4 && x >= 73 + f * 80 && x <= 149 + f * 80) {
-      if (y < 86) galleryRegion = (uint8_t)f;
-      else {
-      galleryFilter = (uint8_t)f;
-      }
-      galleryPage = 0;
-      galleryDirty = true;
-      sfxPlay(SFX_TAP);
-      return;
-    }
+  if (y >= GAL_FILTER_Y && y < GAL_FILTER_Y + GAL_FILTER_H) {
+    if (x >= GAL_REGION_X && x < GAL_REGION_X + GAL_FILTER_W) galleryRegion = (galleryRegion + 1) & 3;
+    else if (x >= GAL_FILTER_X && x < GAL_FILTER_X + GAL_FILTER_W) galleryFilter = (galleryFilter + 1) & 3;
+    else return;
+    galleryPage = 0;
+    galleryDirty = true;
+    sfxPlay(SFX_TAP);
+    return;
+  }
+  if (y >= GAL_NAV_Y && y < GAL_NAV_Y + GAL_NAV_H) {
+    int pages = galleryPageCount();
+    if (x >= GAL_PREV_X && x < GAL_PREV_X + GAL_NAV_W && galleryPage > 0) { galleryPage--; galleryDirty = true; sfxPlay(SFX_MENU); }
+    else if (x >= GAL_NEXT_X && x < GAL_NEXT_X + GAL_NAV_W && galleryPage + 1 < pages) { galleryPage++; galleryDirty = true; sfxPlay(SFX_MENU); }
+    return;
   }
   if (x < GAL_X || y < GAL_Y) return;
   int c = (x - GAL_X) / GAL_CELL, r = (y - GAL_Y) / GAL_CELL;
-  if (c < 0 || c > 3 || r < 0 || r > 3) return;
-  int16_t dex = galleryDexAt(galleryPage * 16 + r * 4 + c);
+  if (c < 0 || c >= GAL_COLS || r < 0 || r >= GAL_ROWS) return;
+  int16_t dex = galleryDexAt(galleryPage * GAL_PER_PAGE + r * GAL_COLS + c);
   if (dex <= 0) return;
   galleryDetail = dex;
   galleryPmd.load(dex, pet.isShinyRegistered(dex));

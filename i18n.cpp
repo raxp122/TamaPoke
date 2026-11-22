@@ -74,6 +74,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Instalada v%s", "Disponible v%s", "BUSCAR", "INSTALAR", "Comprobando...", "Al dia", "Actualizacion lista!", "Actualizacion!", "Reiniciando...", "Sprites actualizados", "No apagues ni desconectes", "Sin Wi-Fi guardada cerca", "Descarga fallida", "Sin version publicada", "Archivo danado, reintenta", "Error de microSD", "microSD llena", "Error al escribir flash", "Primero anade una red Wi-Fi",
     "Hora manual", "Hora de internet %02u:%02u", "Hora de internet: esperando",
     "AJUSTES", "SONIDO Y PANTALLA",
+    "Gira el dedo para pasar",
   },
   // ---------------- EN ----------------
   {
@@ -141,6 +142,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Installed v%s", "Available v%s", "CHECK", "INSTALL", "Checking...", "Up to date", "Update available!", "Update ready!", "Restarting...", "Sprites updated", "Keep it on, do not unplug", "No saved Wi-Fi in range", "Download failed", "No release published", "Corrupted file, retry", "microSD error", "microSD full", "Flash write failed", "Add a Wi-Fi network first",
     "Manual clock", "Internet time %02u:%02u", "Internet time: waiting",
     "SETTINGS", "SOUND & SCREEN",
+    "Circle your finger to browse",
   },
   // ---------------- FR ----------------
   {
@@ -208,6 +210,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Installee v%s", "Disponible v%s", "VERIFIER", "INSTALLER", "Verification...", "A jour", "Mise a jour dispo!", "Mise a jour!", "Redemarrage...", "Sprites a jour", "Ne pas eteindre ni debrancher", "Aucun Wi-Fi connu proche", "Echec du telechargement", "Aucune version publiee", "Fichier corrompu, reessaie", "Erreur microSD", "microSD pleine", "Echec ecriture flash", "Ajoute d'abord un Wi-Fi",
     "Heure manuelle", "Heure internet %02u:%02u", "Heure internet: en attente",
     "REGLAGES", "SON ET ECRAN",
+    "Tourne le doigt pour defiler",
   },
   // ---------------- DE ----------------
   {
@@ -275,6 +278,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Installiert v%s", "Verfuegbar v%s", "PRUEFEN", "INSTALLIEREN", "Pruefe...", "Aktuell", "Update verfuegbar!", "Update da!", "Neustart...", "Sprites aktualisiert", "Nicht ausschalten/abziehen", "Kein bekanntes WLAN da", "Download fehlgeschlagen", "Kein Release vorhanden", "Datei defekt, nochmal", "microSD-Fehler", "microSD voll", "Flash-Schreibfehler", "Zuerst ein WLAN hinzufuegen",
     "Uhr manuell", "Internetzeit %02u:%02u", "Internetzeit: wartet",
     "EINSTELLUNGEN", "TON & ANZEIGE",
+    "Finger kreisen: blaettern",
   },
   // ---------------- IT ----------------
   {
@@ -342,6 +346,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Installata v%s", "Disponibile v%s", "CONTROLLA", "INSTALLA", "Controllo...", "Gia aggiornato", "Aggiornamento pronto!", "Aggiornamento!", "Riavvio...", "Sprite aggiornati", "Non spegnere, non scollegare", "Nessuna rete salvata vicina", "Download non riuscito", "Nessuna release pubblicata", "File corrotto, riprova", "Errore microSD", "microSD piena", "Scrittura flash fallita", "Prima aggiungi una rete Wi-Fi",
     "Ora manuale", "Ora da internet %02u:%02u", "Ora da internet: in attesa",
     "IMPOSTAZIONI", "SUONO E SCHERMO",
+    "Gira il dito per scorrere",
   },
   // ---------------- PT ----------------
   {
@@ -409,6 +414,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Instalada v%s", "Disponivel v%s", "VERIFICAR", "INSTALAR", "Verificando...", "Atualizado", "Atualizacao pronta!", "Atualizacao!", "Reiniciando...", "Sprites atualizados", "Nao desligue nem desconecte", "Sem Wi-Fi salvo por perto", "Falha no download", "Nenhuma versao publicada", "Arquivo corrompido", "Erro na microSD", "microSD cheia", "Falha ao gravar flash", "Adicione uma rede Wi-Fi",
     "Hora manual", "Hora da internet %02u:%02u", "Hora da internet: aguardando",
     "AJUSTES", "SOM E TELA",
+    "Gire o dedo para navegar",
   },
 };
 
