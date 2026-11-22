@@ -9,6 +9,7 @@
 //   tap X Y              finger down and up at X,Y
 //   hold X Y MS          finger held still for MS
 //   swipe X0 Y0 X1 Y1 [MS]
+//   rotate CX CY R DEG0 DEG1 [MS]  finger moving along an arc (DEG1 > DEG0: clockwise)
 //   pwr                  short press of the power button
 //   ota STATE            fake update state: idle | checking | uptodate | available | sprites | firmware | error
 //   shot NAME            save out/NAME.png and add NAME to the layout report
@@ -187,6 +188,8 @@ static int otaFromName(const std::string &s) {
   return OTA_IDLE;
 }
 
+static std::string shotName;
+
 static void runScript(const std::string &path) {
   std::ifstream in(path);
   if (!in) { fprintf(stderr, "cannot open %s\n", path.c_str()); exit(2); }
@@ -204,6 +207,24 @@ static void runScript(const std::string &path) {
     else if (cmd == "tap") { ss >> a >> b; touchPath(a, b, a, b, 80); step(250); }
     else if (cmd == "hold") { ss >> a >> b >> c; touchPath(a, b, a, b, c); step(250); }
     else if (cmd == "swipe") { ss >> a >> b >> c >> d; e = 240; ss >> e; touchPath(a, b, c, d, e); step(400); }
+    else if (cmd == "rotate") {
+      int r0 = 0, d0 = 0, d1 = 0;
+      ss >> a >> b >> r0 >> d0 >> d1; e = 800; ss >> e;
+      int steps = std::max(2, e / 20);
+      gSimTouch.down = true;
+      for (int i = 0; i <= steps; i++) {
+        double th = (d0 + (d1 - d0) * (double)i / steps) * M_PI / 180.0;
+        gSimTouch.x = (int16_t)lround(a + r0 * cos(th));
+        gSimTouch.y = (int16_t)lround(b + r0 * sin(th));
+        gTouchIrq = true;
+        step(20);
+        if (i == steps * 3 / 4 && !shotName.empty()) { shot(shotName); shotName.clear(); }
+      }
+      gSimTouch.down = false;
+      gTouchIrq = true;
+      step(400);
+    }
+    else if (cmd == "rotshot") { ss >> shotName; }  // next rotate takes a shot while the finger is still turning
     else if (cmd == "pwr") { gSim.pwrPressed = true; step(600); }
     else if (cmd == "ota") { std::string s; ss >> s; gSim.otaStatus = otaFromName(s); step(400); }
     else if (cmd == "shot") { std::string n; ss >> n; step(700); shot(n); }

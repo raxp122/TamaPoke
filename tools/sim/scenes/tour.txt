@@ -75,8 +75,19 @@ pwr                  # settings -> main
 # --- pokedex
 swipe 90 233 380 233
 shot 40_pokedex
-tap 150 150
+tap 313 93
+shot 40b_pokedex_filter
+tap 313 93
+tap 313 93
+tap 313 93
+tap 325 380
+shot 40c_pokedex_page2
+tap 141 380
+tap 120 165
 shot 41_pokedex_detail
+rotshot 41b_pokedex_carousel
+rotate 233 233 170 -150 -60 900
+shot 41c_pokedex_after_rotate
 pwr                  # detail -> grid
 pwr                  # grid -> main
 shot 42_back_main
