@@ -104,6 +104,21 @@ bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
 #define CARD_COUNT 9
+#define BOX_ROWS 4
+#define BOX_ROW0_Y 140
+#define BOX_ROW_STEP 48
+#define BOX_ROW_H 44
+#define BOX_NAV_Y 338
+#define BOX_NAV_H 46
+#define BOX_SORT_X 163
+#define BOX_SORT_Y 58
+#define BOX_SORT_W 140
+#define BOX_SORT_H 44
+#define PROFILE_FRAME_Y 336
+#define PROFILE_ARROW_W 64
+#define PROFILE_ARROW_H 46
+#define PROFILE_PREV_X 80
+#define PROFILE_NEXT_X 322
 uint8_t cardPage = 0;         // 0 perfil ... 7 expedicion, 8 pasos/trail
 uint8_t boxPage = 0;
 uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
@@ -1340,11 +1355,11 @@ void onTap(int16_t x, int16_t y) {
       speciesChirpPlay(pet.speciesId, true);
     }
     else if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 0 && y >= 366 && y <= 398) {
+    else if (cardPage == 0 && y >= PROFILE_FRAME_Y && y <= PROFILE_FRAME_Y + PROFILE_ARROW_H) {
       uint8_t count = pet.unlockedCollectionFrameCount();
       uint8_t next = pet.collectionFrame;
-      if (x >= 62 && x <= 146) next = pet.collectionFrame == 0 ? count - 1 : pet.collectionFrame - 1;
-      else if (x >= 320 && x <= 404) next = (uint8_t)((pet.collectionFrame + 1) % count);
+      if (x >= PROFILE_PREV_X && x <= PROFILE_PREV_X + PROFILE_ARROW_W) next = pet.collectionFrame == 0 ? count - 1 : pet.collectionFrame - 1;
+      else if (x >= PROFILE_NEXT_X && x <= PROFILE_NEXT_X + PROFILE_ARROW_W) next = (uint8_t)((pet.collectionFrame + 1) % count);
       else return;
       if (pet.setCollectionFrame(next)) {
         cardDirty = true;
@@ -1353,22 +1368,23 @@ void onTap(int16_t x, int16_t y) {
       }
     }
     else if (cardPage == 3) {
-      if (x >= 302 && x <= 408 && y >= 62 && y <= 92) {
+      if (x >= BOX_SORT_X && x <= BOX_SORT_X + BOX_SORT_W && y >= BOX_SORT_Y && y <= BOX_SORT_Y + BOX_SORT_H) {
         boxSort = (boxSort + 1) % 3;
         boxPage = 0;
         cardDirty = true;
         sfxPlay(SFX_TAP);
-      } else if (x >= 76 && x <= 170 && y >= 348 && y <= 386) {
+      } else if (x >= 86 && x <= 180 && y >= BOX_NAV_Y && y <= BOX_NAV_Y + BOX_NAV_H) {
         if (boxPage > 0) { boxPage--; cardDirty = true; }
         sfxPlay(SFX_TAP);
-      } else if (x >= 296 && x <= 390 && y >= 348 && y <= 386) {
+      } else if (x >= 286 && x <= 380 && y >= BOX_NAV_Y && y <= BOX_NAV_Y + BOX_NAV_H) {
         uint8_t pages = boxPageCount();
         if (boxPage + 1 < pages) { boxPage++; cardDirty = true; }
         sfxPlay(SFX_TAP);
       } else {
-        int row = (y - 122) / 42;
-        if (row >= 0 && row < 5 && x >= 58 && x <= 408 && y >= 122 + row * 42 && y <= 156 + row * 42) {
-          int16_t dex = boxDexAt((uint16_t)boxPage * 5 + row);
+        int row = (y - BOX_ROW0_Y) / BOX_ROW_STEP;
+        if (y >= BOX_ROW0_Y && row < BOX_ROWS && x >= 58 && x <= 408 &&
+            y <= BOX_ROW0_Y + row * BOX_ROW_STEP + BOX_ROW_H) {
+          int16_t dex = boxDexAt((uint16_t)boxPage * BOX_ROWS + row);
           if (dex > 0) {
             cardOpen = false;
             galleryOpen = true;
@@ -4547,38 +4563,38 @@ void renderCardProfile() {
   gfx->setCursor(CX - strlen(info) * 6, 296);
   gfx->print(info);
 
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - strlen(T(S_RENAME_HINT)) * 6, 326);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - strlen(T(S_RENAME_HINT)) * 3, 320);
   gfx->print(T(S_RENAME_HINT));
 
   const char *rank = T((StrId)(S_RANK_TRAINER + pet.collectionRank()));
   char known[22], frame[22];
   snprintf(known, sizeof(known), T(S_KNOWN_FMT), pet.knownDexCount(), DEX_COUNT);
   snprintf(frame, sizeof(frame), T(S_FRAME_FMT), pet.collectionFrame + 1, pet.unlockedCollectionFrameCount());
+  // cornice della collezione: frecce grandi ai lati, testo al centro
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(1);
-  gfx->setCursor(CX - (int)strlen(T(S_COLLECTION)) * 3, 344);
+  gfx->setCursor(CX - (int)strlen(T(S_COLLECTION)) * 3, PROFILE_FRAME_Y + 4);
   gfx->print(T(S_COLLECTION));
   gfx->setTextColor(collectionFrameColor(pet.collectionFrame));
-  gfx->setCursor(CX - (int)strlen(rank) * 3, 356);
+  gfx->setCursor(CX - (int)strlen(rank) * 3, PROFILE_FRAME_Y + 18);
   gfx->print(rank);
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - (int)strlen(known) * 3, 368);
-  gfx->print(known);
-
-  gfx->fillRoundRect(74, 374, 52, 18, 6, UI_WHITE);
-  gfx->drawRoundRect(74, 374, 52, 18, 6, UI_INK);
-  gfx->fillRoundRect(340, 374, 52, 18, 6, UI_WHITE);
-  gfx->drawRoundRect(340, 374, 52, 18, 6, UI_INK);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(94, 376);
-  gfx->print("<");
-  gfx->setCursor(360, 376);
-  gfx->print(">");
-  gfx->setTextSize(1);
-  gfx->setCursor(CX - (int)strlen(frame) * 3, 380);
+  gfx->setCursor(CX - (int)strlen(frame) * 3, PROFILE_FRAME_Y + 32);
   gfx->print(frame);
+  (void)known;
+  bool many = pet.unlockedCollectionFrameCount() > 1;
+  gfx->fillRoundRect(PROFILE_PREV_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_WHITE : UI_BG_DAY);
+  gfx->drawRoundRect(PROFILE_PREV_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_INK : UI_TRACK);
+  gfx->fillRoundRect(PROFILE_NEXT_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_WHITE : UI_BG_DAY);
+  gfx->drawRoundRect(PROFILE_NEXT_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_INK : UI_TRACK);
+  gfx->setTextColor(many ? UI_INK : UI_TRACK);
+  gfx->setTextSize(3);
+  gfx->setCursor(PROFILE_PREV_X + (PROFILE_ARROW_W - 18) / 2, PROFILE_FRAME_Y + 11);
+  gfx->print("<");
+  gfx->setCursor(PROFILE_NEXT_X + (PROFILE_ARROW_W - 18) / 2, PROFILE_FRAME_Y + 11);
+  gfx->print(">");
   gfx->setTextSize(2);
 }
 
@@ -4655,9 +4671,9 @@ void renderCardPersonality() {
 
   char age[20];
   snprintf(age, sizeof(age), T(S_AGE_DAYS_FMT), (unsigned long)(pet.ageMinutes / 1440));
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(age) * 6, 258);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - strlen(age) * 3, 250);  // piccolo, sopra RECORDS (prima si sovrapponeva)
   gfx->print(age);
 
   gfx->setTextColor(UI_INK);
@@ -4746,7 +4762,6 @@ void renderCardDaily() {
   gfx->print(bonus);
 }
 
-#define BOX_ROWS 5
 
 bool boxComesBefore(int16_t a, int16_t b) {
   if (boxSort == 1) {
@@ -4802,15 +4817,17 @@ void renderCardBox() {
 
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(T(S_BOX)) * 9, 42);
+  gfx->setCursor(CX - strlen(T(S_BOX)) * 9, 26);
   gfx->print(T(S_BOX));
 
+  // orden: boton centrado bajo el titulo (antes salia del circulo a la derecha)
   const char *sort = boxSortLabel();
-  gfx->fillRoundRect(302, 62, 106, 28, 9, UI_WHITE);
-  gfx->drawRoundRect(302, 62, 106, 28, 9, UI_INK);
+  gfx->fillRoundRect(BOX_SORT_X, BOX_SORT_Y, BOX_SORT_W, BOX_SORT_H, 12, UI_WHITE);
+  gfx->drawRoundRect(BOX_SORT_X, BOX_SORT_Y, BOX_SORT_W, BOX_SORT_H, 12, UI_INK);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(1);
-  gfx->setCursor(302 + (106 - (int)strlen(sort) * 6) / 2, 73);
+  uint8_t sortTs = (int)strlen(sort) * 12 <= BOX_SORT_W - 10 ? 2 : 1;
+  gfx->setTextSize(sortTs);
+  gfx->setCursor(BOX_SORT_X + (BOX_SORT_W - (int)strlen(sort) * 6 * sortTs) / 2, BOX_SORT_Y + (BOX_SORT_H - 8 * sortTs) / 2 + 1);
   gfx->print(sort);
 
   char caught[24], known[24], goal[22];
@@ -4819,13 +4836,14 @@ void renderCardBox() {
   snprintf(goal, sizeof(goal), T(S_DEX_GOAL_FMT), pet.nextDexGoal());
   gfx->setTextSize(2);
   gfx->setTextColor(UI_INK);
-  gfx->setCursor(72, 70);
+  gfx->setCursor(CX - (int)strlen(caught) * 6, 106);
   gfx->print(caught);
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(72, 92);
-  gfx->print(known);
-  gfx->setCursor(258, 92);
-  gfx->print(goal);
+  char sub[48];
+  snprintf(sub, sizeof(sub), "%s   %s", known, goal);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(sub) * 3, 126);
+  gfx->print(sub);
 
   if (pet.caughtCount() == 0) {
     gfx->fillRoundRect(82, 178, 302, 72, 16, UI_WHITE);
@@ -4845,42 +4863,42 @@ void renderCardBox() {
     int16_t dex = index < boxCount ? boxList[index] : 0;
     if (dex <= 0) break;
     const DexEntry &d = DEX_TBL[dex];
-    int y = 122 + i * 42;
+    int y = BOX_ROW0_Y + i * BOX_ROW_STEP;
     bool raised = pet.isRegistered(dex);
-    gfx->fillRoundRect(58, y, 350, 34, 9, UI_WHITE);
-    gfx->drawRoundRect(58, y, 350, 34, 9, d.accent);
+    gfx->fillRoundRect(58, y, 350, BOX_ROW_H, 10, UI_WHITE);
+    gfx->drawRoundRect(58, y, 350, BOX_ROW_H, 10, d.accent);
     char name[24];
     snprintf(name, sizeof(name), "#%03d %s", dex, dexName(dex));
     int ts = strlen(name) <= 16 ? 2 : 1;
     gfx->setTextSize(ts);
     gfx->setTextColor(UI_INK);
-    gfx->setCursor(72, y + (ts == 2 ? 7 : 5));
+    gfx->setCursor(72, y + (ts == 2 ? 9 : 8));
     gfx->print(name);
     char types[22];
     typeText(types, sizeof(types), d);
     gfx->setTextSize(1);
     gfx->setTextColor(battleTypeColor(d.type1));
-    gfx->setCursor(72, y + 24);
+    gfx->setCursor(72, y + 30);
     gfx->print(types);
     if (raised) {
       gfx->setTextColor(UI_BAR_OK);
-      gfx->setCursor(330, y + 15);
+      gfx->setCursor(330, y + 18);
       gfx->print(T(S_RAISED_MARK));
     }
   }
-  gfx->fillRoundRect(76, 348, 94, 38, 11, boxPage > 0 ? UI_TRACK : C565(0xe4, 0xe8, 0xee));
-  gfx->fillRoundRect(296, 348, 94, 38, 11, boxPage + 1 < pages ? UI_TRACK : C565(0xe4, 0xe8, 0xee));
+  gfx->fillRoundRect(86, BOX_NAV_Y, 94, BOX_NAV_H, 12, boxPage > 0 ? UI_TRACK : C565(0xe4, 0xe8, 0xee));
+  gfx->fillRoundRect(286, BOX_NAV_Y, 94, BOX_NAV_H, 12, boxPage + 1 < pages ? UI_TRACK : C565(0xe4, 0xe8, 0xee));
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(3);
-  gfx->setCursor(111, 357);
+  gfx->setCursor(124, BOX_NAV_Y + 12);
   gfx->print("<");
-  gfx->setCursor(331, 357);
+  gfx->setCursor(324, BOX_NAV_Y + 12);
   gfx->print(">");
   char pg[12];
   snprintf(pg, sizeof(pg), T(S_PAGE_FMT), boxPage + 1, pages);
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(pg) * 6, 360);
+  gfx->setCursor(CX - strlen(pg) * 6, BOX_NAV_Y + 15);
   gfx->print(pg);
 }
 
@@ -4935,21 +4953,20 @@ void renderCardMedals() {
   gfx->setCursor(CX - strlen(head) * 9, 48);
   gfx->print(head);
 
+  // rejilla 3x3 dentro del circulo: nombre corto grande y descripcion debajo
   for (int i = 0; i < MED_COUNT; i++) {
-    int x = 28 + (i % 2) * 206, y = 104 + (i / 2) * 54;
+    int x = 62 + (i % 3) * 118, y = 96 + (i / 3) * 84;
     bool g = pet.hasMedal(1 << i);
-    gfx->fillRoundRect(x, y, 196, 44, 10, g ? UI_BAR_OK : UI_TRACK);
-    if (g) {  // marca de conseguida
-      gfx->fillCircle(x + 22, y + 22, 11, UI_BG_DAY);
-      gfx->setTextColor(UI_BAR_OK);
-      gfx->setTextSize(2);
-      gfx->setCursor(x + 16, y + 13);
-      gfx->print("v");
-    }
+    gfx->fillRoundRect(x, y, 108, 74, 12, g ? UI_BAR_OK : UI_TRACK);
     gfx->setTextColor(g ? UI_BG_DAY : 0x8410);
     gfx->setTextSize(2);
-    gfx->setCursor(x + 44, y + 14);
-    gfx->print(medalDesc(i));
+    const char *lbl = medalLabel(i);
+    gfx->setCursor(x + (108 - (int)strlen(lbl) * 12) / 2, y + 16);
+    gfx->print(lbl);
+    gfx->setTextSize(1);
+    const char *dsc = medalDesc(i);
+    gfx->setCursor(x + (108 - (int)strlen(dsc) * 6) / 2, y + 48);
+    gfx->print(dsc);
   }
 }
 
@@ -5030,16 +5047,19 @@ void renderCardSteps() {
   char today[28], total[28];
   snprintf(today, sizeof(today), T(S_STEPS_TODAY_FMT), (unsigned long)pet.stepsToday);
   snprintf(total, sizeof(total), T(S_STEPS_TOTAL_FMT), (unsigned long)pet.stepsTotal);
-  gfx->fillRoundRect(42, 76, 184, 58, 14, UI_WHITE);
-  gfx->drawRoundRect(42, 76, 184, 58, 14, UI_BAR_OK);
-  gfx->fillRoundRect(240, 76, 184, 58, 14, UI_WHITE);
-  gfx->drawRoundRect(240, 76, 184, 58, 14, UI_BAR_WARN);
+  // dos recuadros dentro del circulo (antes salian por los lados)
+  gfx->fillRoundRect(64, 80, 166, 56, 14, UI_WHITE);
+  gfx->drawRoundRect(64, 80, 166, 56, 14, UI_BAR_OK);
+  gfx->fillRoundRect(236, 80, 166, 56, 14, UI_WHITE);
+  gfx->drawRoundRect(236, 80, 166, 56, 14, UI_BAR_WARN);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(42 + (184 - (int)strlen(today) * 12) / 2, 99);
+  uint8_t sts = ((int)strlen(today) * 12 <= 158 && (int)strlen(total) * 12 <= 158) ? 2 : 1;
+  gfx->setTextSize(sts);
+  gfx->setCursor(64 + (166 - (int)strlen(today) * 6 * sts) / 2, 108 - 4 * sts);
   gfx->print(today);
-  gfx->setCursor(240 + (184 - (int)strlen(total) * 12) / 2, 99);
+  gfx->setCursor(236 + (166 - (int)strlen(total) * 6 * sts) / 2, 108 - 4 * sts);
   gfx->print(total);
+  gfx->setTextSize(2);
 
   char rank[24], shiny[24], catchBuf[24];
   snprintf(rank, sizeof(rank), T(S_TRAIL_RANK_FMT), pet.stepTrailRank());
@@ -5065,20 +5085,20 @@ void renderCardSteps() {
     uint32_t goal = pet.stepGoal(i);
     uint32_t progress = pet.stepsToday < goal ? pet.stepsToday : goal;
     bool done = pet.stepGoalComplete(i);
-    int y = 224 + i * 48;
+    int y = 224 + i * 50;
     uint16_t col = i == 0 ? UI_BAR_OK : (i == 1 ? UI_BAR_WARN : UI_BAR_BAD);
-    gfx->fillRoundRect(48, y, 370, 38, 10, done ? col : UI_WHITE);
-    gfx->drawRoundRect(48, y, 370, 38, 10, col);
+    gfx->fillRoundRect(52, y, 362, 44, 10, done ? col : UI_WHITE);
+    gfx->drawRoundRect(52, y, 362, 44, 10, col);
     gfx->setTextColor(done ? UI_BG_DAY : UI_INK);
     gfx->setTextSize(1);
     char goalText[18], prog[18];
     snprintf(goalText, sizeof(goalText), T(S_STEP_GOAL_FMT), (unsigned long)goal);
     snprintf(prog, sizeof(prog), "%lu/%lu", (unsigned long)progress, (unsigned long)goal);
-    gfx->setCursor(66, y + 9);
+    gfx->setCursor(66, y + 18);
     gfx->print(goalText);
-    gfx->setCursor(232, y + 9);
+    gfx->setCursor(226, y + 18);
     gfx->print(T(stepRewardTextId(i)));
-    gfx->setCursor(354, y + 9);
+    gfx->setCursor(350, y + 18);
     gfx->print(done ? T(S_DONE) : prog);
   }
 }
@@ -5228,6 +5248,25 @@ void drawExpeditionHud() {
   gfx->print(label);
 }
 
+// columnas de lugares y duraciones de la expedicion (dentro del circulo)
+#define EXP_COL_X0 66
+#define EXP_COL_W 100
+#define EXP_COL_STEP 117
+#define EXP_SITE_Y 72
+#define EXP_SITE_H 44
+#define EXP_TIME_Y 128
+#define EXP_TIME_H 56
+#define EXP_ITEM_Y0 218
+#define EXP_ITEM_Y1 280
+
+int expeditionColumnAt(int16_t x) {
+  for (int i = 0; i < 3; i++) {
+    int cx0 = EXP_COL_X0 + i * EXP_COL_STEP - 4;
+    if (x >= cx0 && x < cx0 + EXP_COL_W + 8) return i;
+  }
+  return -1;
+}
+
 void drawExpeditionItem(int x, int y, ExpeditionItem item) {
   const int w = 172, h = 54;
   uint8_t count = pet.itemCounts[item];
@@ -5289,7 +5328,7 @@ void renderCardExpedition() {
   uint32_t nowEpoch = expeditionNowEpoch();
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(T(S_EXPEDITION)) * 9, 42);
+  gfx->setCursor(CX - strlen(T(S_EXPEDITION)) * 9, 34);
   gfx->print(T(S_EXPEDITION));
 
   if (pet.expeditionReady(nowEpoch)) {
@@ -5322,58 +5361,58 @@ void renderCardExpedition() {
     gfx->print(T(S_WAIT));
   } else {
     const ExpeditionSite sites[3] = { EXP_SITE_COAST, EXP_SITE_VOLCANO, EXP_SITE_FOREST };
-    const int siteXs[3] = { 50, 180, 310 };
     for (uint8_t i = 0; i < 3; i++) {
       bool selected = expeditionSiteChoice == sites[i];
       uint16_t col = expeditionSiteColor(sites[i]);
-      gfx->fillRoundRect(siteXs[i], 60, 106, 28, 8, selected ? col : UI_WHITE);
-      gfx->drawRoundRect(siteXs[i], 60, 106, 28, 8, col);
-      gfx->setTextColor(selected ? UI_BG_DAY : UI_INK); gfx->setTextSize(1);
+      int sx = EXP_COL_X0 + i * EXP_COL_STEP;
+      gfx->fillRoundRect(sx, EXP_SITE_Y, EXP_COL_W, EXP_SITE_H, 10, selected ? col : UI_WHITE);
+      gfx->drawRoundRect(sx, EXP_SITE_Y, EXP_COL_W, EXP_SITE_H, 10, col);
+      gfx->setTextColor(selected ? UI_BG_DAY : UI_INK);
       const char *name = T(expeditionSiteText(sites[i]));
-      gfx->setCursor(siteXs[i] + (106 - (int)strlen(name) * 6) / 2, 70); gfx->print(name);
+      uint8_t ts = (int)strlen(name) * 12 <= EXP_COL_W - 8 ? 2 : 1;
+      gfx->setTextSize(ts);
+      gfx->setCursor(sx + (EXP_COL_W - (int)strlen(name) * 6 * ts) / 2, EXP_SITE_Y + (EXP_SITE_H - 8 * ts) / 2 + 1);
+      gfx->print(name);
     }
     char seals[20]; snprintf(seals, sizeof(seals), T(S_EXP_SEALS_FMT), pet.hoennSealCount());
-    gfx->setTextColor(pet.hoennSealCount() == 3 ? UI_BAR_WARN : UI_TRACK); gfx->setTextSize(1);
-    gfx->setCursor(CX - (int)strlen(seals) * 3, 90); gfx->print(seals);
+    gfx->setTextColor(pet.hoennSealCount() == 3 ? UI_BAR_WARN : NET_DIM_INK); gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(seals) * 3, EXP_SITE_Y + EXP_SITE_H + 5); gfx->print(seals);
     const uint8_t minutes[3] = { 15, 30, 60 };
     const StrId labels[3] = { S_EXP_15, S_EXP_30, S_EXP_60 };
-    const int xs[3] = { 50, 180, 310 };
     for (uint8_t i = 0; i < 3; i++) {
       uint8_t cost = Pet::expeditionEnergyCost(minutes[i]);
       bool available = pet.canStartExpedition(minutes[i], nowEpoch);
       uint16_t col = i == 0 ? UI_BAR_OK : i == 1 ? 0x4C98 : UI_BAR_BAD;
-      gfx->fillRoundRect(xs[i], 100, 106, 54, 9, available ? col : UI_TRACK);
+      int bx = EXP_COL_X0 + i * EXP_COL_STEP;
+      gfx->fillRoundRect(bx, EXP_TIME_Y, EXP_COL_W, EXP_TIME_H, 10, available ? col : UI_TRACK);
       gfx->setTextColor(UI_BG_DAY);
       gfx->setTextSize(2);
       const char *label = T(labels[i]);
-      gfx->setCursor(xs[i] + (106 - (int)strlen(label) * 12) / 2, 110);
+      gfx->setCursor(bx + (EXP_COL_W - (int)strlen(label) * 12) / 2, EXP_TIME_Y + 8);
       gfx->print(label);
       char costText[12];
       snprintf(costText, sizeof(costText), "-%u ENE", cost);
       gfx->setTextSize(1);
-      gfx->setCursor(xs[i] + (106 - (int)strlen(costText) * 6) / 2, 136);
+      gfx->setCursor(bx + (EXP_COL_W - (int)strlen(costText) * 6) / 2, EXP_TIME_Y + 32);
       gfx->print(costText);
       char goalText[24]; snprintf(goalText, sizeof(goalText), T(S_EXP_WALK_PROGRESS), 0, Pet::expeditionStepGoal(minutes[i]));
-      gfx->setCursor(xs[i] + (106 - (int)strlen(goalText) * 6) / 2, 146); gfx->print(goalText);
+      gfx->setCursor(bx + (EXP_COL_W - (int)strlen(goalText) * 6) / 2, EXP_TIME_Y + 44); gfx->print(goalText);
     }
-    if (pet.expeditionInventoryFull()) {
+    const char *warn = nullptr;
+    char need[24];
+    if (pet.expeditionInventoryFull()) warn = T(S_INV_FULL);
+    else if (pet.energy < 12) { snprintf(need, sizeof(need), T(S_NEED_ENE_FMT), 12); warn = need; }
+    if (warn) {
       gfx->setTextColor(UI_BAR_BAD);
       gfx->setTextSize(1);
-      gfx->setCursor(CX - strlen(T(S_INV_FULL)) * 3, 164);
-      gfx->print(T(S_INV_FULL));
-    } else if (pet.energy < 12) {
-      char need[24];
-      snprintf(need, sizeof(need), T(S_NEED_ENE_FMT), 12);
-      gfx->setTextColor(UI_BAR_BAD);
-      gfx->setTextSize(1);
-      gfx->setCursor(CX - strlen(need) * 3, 164);
-      gfx->print(need);
+      gfx->setCursor(CX - strlen(warn) * 3, EXP_TIME_Y + EXP_TIME_H + 4);
+      gfx->print(warn);
     }
   }
 
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_INVENTORY)) * 6, 184);
+  gfx->setCursor(CX - strlen(T(S_INVENTORY)) * 6, 199);
   gfx->print(T(S_INVENTORY));
   if (pet.expeditionEndEpoch && pet.expeditionMinutes) {
     char progress[48];
@@ -5382,19 +5421,19 @@ void renderCardExpedition() {
     gfx->setTextSize(1); gfx->setTextColor(pet.expeditionWalkBonusEarned() ? UI_BAR_OK : UI_INK);
     gfx->setCursor(CX - (int)strlen(progress) * 3, 160); gfx->print(progress);
   }
-  drawExpeditionItem(50, 200, EXP_ITEM_SNACK);
-  drawExpeditionItem(244, 200, EXP_ITEM_ENERGY);
-  drawExpeditionItem(50, 264, EXP_ITEM_CARE);
-  drawExpeditionItem(244, 264, EXP_ITEM_TRAIN);
+  drawExpeditionItem(50, EXP_ITEM_Y0, EXP_ITEM_SNACK);
+  drawExpeditionItem(244, EXP_ITEM_Y0, EXP_ITEM_ENERGY);
+  drawExpeditionItem(50, EXP_ITEM_Y1, EXP_ITEM_CARE);
+  drawExpeditionItem(244, EXP_ITEM_Y1, EXP_ITEM_TRAIN);
   if (expeditionTrainChoiceOpen) renderExpeditionTrainChoice();
 }
 
 int8_t expeditionItemAt(int16_t x, int16_t y) {
-  if ((y < 200 || y > 254) && (y < 264 || y > 318)) return -1;
+  if ((y < EXP_ITEM_Y0 || y > EXP_ITEM_Y0 + 54) && (y < EXP_ITEM_Y1 || y > EXP_ITEM_Y1 + 54)) return -1;
   bool left = x >= 50 && x <= 222;
   bool right = x >= 244 && x <= 416;
   if (!left && !right) return -1;
-  uint8_t row = y >= 264 ? 1 : 0;
+  uint8_t row = y >= EXP_ITEM_Y1 ? 1 : 0;
   return row * 2 + (right ? 1 : 0);
 }
 
@@ -5414,14 +5453,6 @@ void expeditionCardTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  if (y >= 396) {
-    cardOpen = false;
-    markUiDirty();
-    lockTouchBrief();
-    sfxPlay(SFX_TAP);
-    return;
-  }
-
   uint32_t nowEpoch = expeditionNowEpoch();
   if (pet.expeditionReady(nowEpoch)) {
     if (x >= 98 && x <= 368 && y >= 98 && y <= 146) {
@@ -5433,14 +5464,14 @@ void expeditionCardTap(int16_t x, int16_t y) {
     }
     return;
   }
-  if (!pet.expeditionActive(nowEpoch) && y >= 60 && y <= 88) {
-    int idx = x >= 50 && x <= 156 ? 0 : x >= 180 && x <= 286 ? 1 : x >= 310 && x <= 416 ? 2 : -1;
+  if (!pet.expeditionActive(nowEpoch) && y >= EXP_SITE_Y && y <= EXP_SITE_Y + EXP_SITE_H) {
+    int idx = expeditionColumnAt(x);
     if (idx >= 0) { expeditionSiteChoice = (ExpeditionSite)idx; cardDirty = true; sfxPlay(SFX_TAP); lockTouchBrief(); }
     return;
   }
-  if (!pet.expeditionActive(nowEpoch) && y >= 100 && y <= 154) {
+  if (!pet.expeditionActive(nowEpoch) && y >= EXP_TIME_Y && y <= EXP_TIME_Y + EXP_TIME_H) {
     const uint8_t minutes[3] = { 15, 30, 60 };
-    int idx = x >= 50 && x <= 156 ? 0 : x >= 180 && x <= 286 ? 1 : x >= 310 && x <= 416 ? 2 : -1;
+    int idx = expeditionColumnAt(x);
     if (idx >= 0 && pet.startExpedition(minutes[idx], nowEpoch, (uint8_t)random(100), (uint8_t)random(4), expeditionSiteChoice, (uint8_t)random(100))) {
       sfxPlay(SFX_EXPEDITION_START);
       cardDirty = true;
