@@ -347,6 +347,11 @@ uint32_t lastRender = 0;
 uint32_t lastLoopStart = 0;
 uint32_t perfRenderLastMs = 0, perfRenderMaxMs = 0;
 uint32_t perfLoopLastMs = 0, perfLoopMaxMs = 0;
+// parte mas lenta del bucle en la ventana actual (diagnostico en Ajustes > Info)
+const char *perfSlowName = "-";
+uint32_t perfSlowMs = 0;
+#define PERF_SECTION(name, code) do { uint32_t _pt = millis(); code; uint32_t _pd = millis() - _pt; \
+  if (_pd > perfSlowMs) { perfSlowMs = _pd; perfSlowName = name; } } while (0)
 uint32_t perfRenderCount = 0, perfRenderSkipCount = 0;
 // proteccion del AMOLED: atenuado por inactividad
 uint32_t lastInteract = 0;
@@ -578,7 +583,8 @@ void maybeLightSleep(uint32_t now) {
 void loop() {
   uint32_t now = millis();
   uint32_t loopStart = now;
-  bool petChanged = pet.update(now);
+  bool petChanged;
+  PERF_SECTION("pet", petChanged = pet.update(now));
   if (petChanged && cardOpen && cardPage != 7) cardDirty = true;
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
@@ -593,14 +599,14 @@ void loop() {
   if (runReady && !wasRunReady) sfxPlay(SFX_DENY);
   wasRunReady = runReady;
 
-  handleTouch();
-  handleSerial();
-  netService(now);
+  PERF_SECTION("touch", handleTouch());
+  PERF_SECTION("serial", handleSerial());
+  PERF_SECTION("wifi", netService(now));
   bool gpsPage = clockOpen && setPage == SETP_GPS;
-  gpsPoll(now, gpsPage);  // el GNSS solo funciona con su pagina abierta
+  PERF_SECTION("gps", gpsPoll(now, gpsPage));  // el GNSS solo funciona con su pagina abierta
   static uint32_t gpsSeen = 0;
   if (gpsPage && gpsGen() != gpsSeen) { gpsSeen = gpsGen(); clockDirty = true; }
-  ensureMon();
+  PERF_SECTION("sprite SD", ensureMon());
   setPowerCacheInterval(powerSave ? 10000UL : 2000UL);
   pet.ensureDailyGoals();
   maybeOfferWildEncounter(now);
@@ -609,7 +615,7 @@ void loop() {
   maybePlayAmbientSound(now);
 
   uint16_t imuMs = screenOff ? 70 : (dimStage ? 60 : 40);
-  imuPoll(now, imuMs);
+  PERF_SECTION("imu", imuPoll(now, imuMs));
   uint32_t stepsBefore = pet.stepsToday;
   uint32_t stepDayBefore = pet.stepDay;
   uint16_t walked = imuTakeSteps();
@@ -683,7 +689,7 @@ void loop() {
   // de inactividad la pantalla ya atenua, asi que se vuelca enseguida; el uso
   // activo persiste igual por los guardados de cada accion (comer/jugar/...).
   if (pet.savePending() && (screenOff || dimStage >= 1 || pet.sleeping)) {
-    pet.flushSave();
+    PERF_SECTION("save", pet.flushSave());
   }
 
   // anota la hora real cada 30 s (se persiste en cada save del juego)
@@ -713,6 +719,8 @@ void loop() {
                   (unsigned long)perfRenderMaxMs, (unsigned long)perfLoopMaxMs, screenName());
     perfRenderMaxMs = 0;
     perfLoopMaxMs = 0;
+    perfSlowMs = 0;
+    perfSlowName = "-";
   }
 
   // Juego/combate usan intervalos conservadores para que el redibujado no pise
@@ -721,15 +729,16 @@ void loop() {
   if (now - lastRender >= renderIntervalMs()) {
     lastRender = now;
     uint32_t rt0 = millis();
-    render();
+    PERF_SECTION("render", render());
     perfRenderLastMs = millis() - rt0;
     if (perfRenderLastMs > perfRenderMaxMs) perfRenderMaxMs = perfRenderLastMs;
     perfRenderCount++;
   }
 
-  maybeLightSleep(millis());
+  // el light sleep del ahorro de energia no es trabajo del bucle: se mide antes
   perfLoopLastMs = millis() - loopStart;
   if (perfLoopLastMs > perfLoopMaxMs) perfLoopMaxMs = perfLoopLastMs;
+  maybeLightSleep(millis());
   lastLoopStart = loopStart;
 }
 
@@ -3832,7 +3841,7 @@ static void renderSettingsInfo() {
     snprintf(l[3], sizeof(l[3]), "PET #%d %s", pet.speciesId, level);
   }
   snprintf(l[4], sizeof(l[4]), "SAVE %lums", (unsigned long)gPetLastSaveMs);
-  snprintf(l[5], sizeof(l[5]), "LOOP MAX %lums", (unsigned long)perfLoopMaxMs);
+  snprintf(l[5], sizeof(l[5]), "LOOP MAX %lums %s", (unsigned long)perfLoopMaxMs, perfSlowMs ? perfSlowName : "");
   for (int i = 0; i < 6; i++) {
     gfx->setTextColor(i >= 4 ? NET_DIM_INK : UI_INK);
     gfx->setTextSize(2);
@@ -6569,10 +6578,22 @@ static void buildArc(ArcShape &a) {
   int sx, sy, ex, ey;
   arcPoint(a.startDeg, rMid, sx, sy);
   arcPoint(a.endDeg, rMid, ex, ey);
+  // solo el rectangulo que contiene el arco (antes se recorria toda la pantalla)
+  int bx0 = LCD_WIDTH, by0 = LCD_HEIGHT, bx1 = 0, by1 = 0;
+  for (float dg = lo; dg <= hi + 0.01f; dg += 1.0f) {
+    for (int r = ARC_R_IN - 9; r <= ARC_R_OUT + 1; r += ARC_R_OUT + 10 - ARC_R_IN) {
+      int px, py;
+      arcPoint(dg, r, px, py);
+      if (px < bx0) bx0 = px; if (px > bx1) bx1 = px;
+      if (py < by0) by0 = py; if (py > by1) by1 = py;
+    }
+  }
+  bx0 = bx0 > 10 ? bx0 - 10 : 0; by0 = by0 > 10 ? by0 - 10 : 0;
+  bx1 = bx1 + 10 < LCD_WIDTH ? bx1 + 10 : LCD_WIDTH - 1; by1 = by1 + 10 < LCD_HEIGHT ? by1 + 10 : LCD_HEIGHT - 1;
   for (int pass = 0; pass < 2; pass++) {  // 1: contar, 2: guardar
     uint16_t n = 0;
-    for (int y = 0; y < LCD_HEIGHT; y++) {
-      for (int x = 0; x < LCD_WIDTH; x++) {
+    for (int y = by0; y <= by1; y++) {
+      for (int x = bx0; x <= bx1; x++) {
         float dx = x - CX, dy = y - CY, r2 = dx * dx + dy * dy;
         if (r2 < (ARC_R_IN - 9) * (ARC_R_IN - 9) || r2 > (ARC_R_OUT + 1) * (ARC_R_OUT + 1)) continue;
         float deg = atan2f(dy, dx) * 180.0f / (float)PI;
