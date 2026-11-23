@@ -6,6 +6,18 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Ball** is now a catching game: tilt the board to move the Pokémon at the
+  bottom and catch the falling Poké Balls. They fall faster and more often with
+  the score; from 5 points Voltorb fall too: catching one ends the game, three
+  missed Poké Balls also do. A tap sets the current position as flat. Without
+  a motion sensor the Pokémon follows your finger.
+- **Clean** has no lives any more: two stains are always on screen and a new
+  one appears as soon as you clean one, so the faster you rub, the more you
+  clean in 25 seconds.
+- Help: Ball and Clean lines updated.
+
+## 1.37.81 — README
+
 - README: shake, running away, poop, Type quiz and item icons described; dial
   pages explained once for both settings pages.
 

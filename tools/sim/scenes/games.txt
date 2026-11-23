@@ -10,9 +10,16 @@ tap 233 230
 wait 6000
 tap 197 391
 tap 157 185
-wait 1500
+wait 500
+shot 60_ball_hint
+wait 3500
+tilt 0 -0.3
+wait 700
+tilt 0 0
+wait 2500
 shot 60_ball
 pwr
+wait 1500
 tap 197 391
 tap 157 255
 wait 400
@@ -20,16 +27,31 @@ shot 61_memo_ready
 wait 900
 shot 62_memo_watch
 pwr
+wait 1500
+tap 130 352
+wait 300
+tap 57 233
+tap 233 233
+wait 1500
 tap 197 391
-tap 233 327
+wait 300
+tap 157 325
 wait 600
 shot 63_type
 pwr
+wait 1500
+tap 130 352
+wait 300
+tap 57 233
+tap 233 233
+wait 1500
 tap 197 391
+wait 300
 tap 309 255
 wait 2500
 shot 64_clean
 pwr
+wait 1500
 tap 197 391
 tap 309 185
 wait 500
