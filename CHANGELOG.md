@@ -6,6 +6,17 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Type**: Pokémon with two types are judged on both, with the real
+  multipliers of the games (×2, ×½, ×0 for each type): against Lotad
+  (Grass/Water) Fire is neutral and no longer the right answer. The right
+  answer is always the most effective type (super effective); the other two
+  are clearly worse.
+- **Less poop**: at most one every 90 minutes awake (about one every 2 hours,
+  it was about one every 7 minutes), and each one lowers hygiene by 2 a minute
+  instead of 4.
+
+## 1.37.66 — Slip-ups, running away, shake
+
 - **Slip-ups** are counted only after a need has stayed at 10 or less for
   6 hours in a row while the Pokémon is awake (it was every 30 minutes):
   checking it in the morning, at lunch and in the evening is enough, a whole

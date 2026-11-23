@@ -381,7 +381,19 @@ static void testTurnBattleEndsAtRoundLimitByRemainingHp() {
   EXPECT_EQ(battle.round, 20);
 }
 
+static void testTrueTypeMultiplierForDualTypes() {
+  // Lotad (grass/water): fire is neutral, not super effective
+  EXPECT_EQ(battleTypeTrueQuarters(TYPE_FIRE, TYPE_GRASS, TYPE_WATER), 4);
+  EXPECT_EQ(battleTypeTrueQuarters(TYPE_FLYING, TYPE_GRASS, TYPE_WATER), 8);
+  EXPECT_EQ(battleTypeTrueQuarters(TYPE_WATER, TYPE_GRASS, TYPE_WATER), 1);
+  EXPECT_EQ(battleTypeTrueQuarters(TYPE_ELECTRIC, TYPE_WATER, TYPE_FLYING), 16);
+  EXPECT_EQ(battleTypeTrueQuarters(TYPE_GROUND, TYPE_FIRE, TYPE_FLYING), 0);
+  EXPECT_EQ(battleTypeTrueQuarters(TYPE_FIRE, TYPE_GRASS, TYPE_NONE), 8);
+  EXPECT_EQ(battleTypeTrueQuarters(TYPE_FIRE, TYPE_WATER, TYPE_ROCK), 1);
+}
+
 int main() {
+  testTrueTypeMultiplierForDualTypes();
   testStrongerPlayerWins();
   testStrongerEnemyWins();
   testFasterPokemonHitsFirst();

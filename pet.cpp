@@ -92,6 +92,7 @@ void Pet::newEgg() {
   farDeclinedAge = 0;
   careMistakes = 0;
   lowMinutes = 0;
+  poopMinutes = 0;
   sleeping = false;
   save();
 }
@@ -201,9 +202,14 @@ void Pet::tick() {
 
   fullness = clamp100(fullness - nightFoodDrop(lastSeenEpoch));
   energy = clamp100(energy - 1);
-  if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
+  // caca: como mucho una cada 90 min despierto (antes 15 %/min, una cada ~7 min)
+  if (poopMinutes < 0xFFFF) poopMinutes++;
+  if (fullness > 40 && poops < 3 && poopMinutes >= POOP_MIN_MINUTES && random(100) < 5) {
+    poops++;
+    poopMinutes = 0;
+  }
 
-  hygiene = clamp100(hygiene - 1 - 4 * poops);
+  hygiene = clamp100(hygiene - 1 - 2 * poops);
   // el sobrepeso da pereza: la energia cae el doble
   if (weight > 50) energy = clamp100(energy - 1);
   if (weight > 0 && ageMinutes % 3 == 0) weight--;

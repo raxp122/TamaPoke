@@ -202,6 +202,19 @@ uint8_t battleTypeEffectPct(uint8_t attackType, uint8_t defendType1, uint8_t def
   return effectPctFor(attackType, defendType1, defendType2);
 }
 
+uint8_t battleTypeTrueQuarters(uint8_t attackType, uint8_t defendType1, uint8_t defendType2) {
+  uint8_t q = 4;
+  const uint8_t defendTypes[2] = { defendType1, defendType2 };
+  for (uint8_t i = 0; i < 2; i++) {
+    if (defendTypes[i] == TYPE_NONE || (i == 1 && defendTypes[1] == defendTypes[0])) continue;
+    int8_t relation = typeRelation(attackType, defendTypes[i]);
+    if (relation > 0) q *= 2;
+    else if (relation == -1) q /= 2;
+    else if (relation == -2) q = 0;
+  }
+  return q;
+}
+
 bool canStartWildBattle(bool isEgg, bool sleeping, uint8_t ceremony) {
   return !isEgg && !sleeping && ceremony == 0;
 }

@@ -2186,27 +2186,35 @@ static const uint8_t TYPE_ATK_POOL[] = {
 };
 #define TYPE_ATK_COUNT ((int)sizeof(TYPE_ATK_POOL))
 
-// rival: un Pokemon de verdad (uno o dos tipos). Respuesta correcta: un tipo
-// superefectivo; las otras dos al principio resistidas, despues tambien neutras.
+// rival: un Pokemon de verdad (uno o dos tipos). Se usan los multiplicadores
+// verdaderos de los juegos sobre LOS DOS tipos (Lotad planta/agua: fuego es
+// neutro). Respuesta correcta: el tipo mas eficaz (siempre superefectivo); las
+// otras dos claramente peores: al principio resistidas/inmunes, despues tambien neutras.
 void nextTypeQuestion() {
-  uint8_t good[TYPE_ATK_COUNT], ng = 0;
-  for (int tries = 0; tries < 60 && ng == 0; tries++) {
+  uint8_t q[TYPE_ATK_COUNT], best = 0;
+  for (int tries = 0; tries < 80; tries++) {
     typeEnemyDex = 1 + random(DEX_COUNT);
     typeEnemy = DEX_TBL[typeEnemyDex].type1;
     typeEnemy2 = DEX_TBL[typeEnemyDex].type2;
-    ng = 0;
-    for (int i = 0; i < TYPE_ATK_COUNT; i++)
-      if (battleTypeEffectPct(TYPE_ATK_POOL[i], typeEnemy, typeEnemy2) > 100) good[ng++] = TYPE_ATK_POOL[i];
+    best = 0;
+    for (int i = 0; i < TYPE_ATK_COUNT; i++) {
+      q[i] = battleTypeTrueQuarters(TYPE_ATK_POOL[i], typeEnemy, typeEnemy2);
+      if (q[i] > best) best = q[i];
+    }
+    if (best >= 8) break;  // hay un superefectivo
   }
-  uint8_t correct = ng ? good[random(ng)] : TYPE_FIGHTING;
-  uint8_t worstAllowed = gameScore < 8 ? 99 : 100;  // tabla del juego: 120 super, 100 neutro, 85 resistido
+  uint8_t good[TYPE_ATK_COUNT], ng = 0;
+  for (int i = 0; i < TYPE_ATK_COUNT; i++)
+    if (q[i] == best) good[ng++] = TYPE_ATK_POOL[i];
+  uint8_t correct = good[random(ng)];
+  uint8_t worstAllowed = gameScore < 8 ? 2 : 4;  // en cuartos: 2 = x0.5, 4 = neutro
   uint8_t bad[TYPE_ATK_COUNT], nb = 0;
   for (int i = 0; i < TYPE_ATK_COUNT; i++)
-    if (battleTypeEffectPct(TYPE_ATK_POOL[i], typeEnemy, typeEnemy2) <= worstAllowed) bad[nb++] = TYPE_ATK_POOL[i];
-  if (nb < 2) {  // pocos resistidos: tambien valen los neutros
+    if (q[i] <= worstAllowed && q[i] < best) bad[nb++] = TYPE_ATK_POOL[i];
+  if (nb < 2) {  // pocos resistidos: tambien valen los neutros (siempre peores que el correcto)
     nb = 0;
     for (int i = 0; i < TYPE_ATK_COUNT; i++)
-      if (battleTypeEffectPct(TYPE_ATK_POOL[i], typeEnemy, typeEnemy2) <= 100) bad[nb++] = TYPE_ATK_POOL[i];
+      if (q[i] <= 4 && q[i] < best) bad[nb++] = TYPE_ATK_POOL[i];
   }
   typeCorrect = (uint8_t)random(3);
   for (uint8_t i = 0; i < 3; i++) typeChoice[i] = TYPE_NONE;
