@@ -183,14 +183,21 @@ bool gameOpen = false;
 bool gameMenuOpen = false;
 uint8_t gameMode = 0;  // 0 ball, 1 catch, 2 memo
 uint32_t gameOverUntil = 0;
-float ballX, ballY, ballVX, ballVY, gamePetX;
+float gamePetX, gamePetVX;      // BALL: el Pokemon de abajo, movido inclinando la placa
 uint8_t gameScore, gameMisses;
 float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
-uint32_t ballLastHitAt = 0, ballStepAt = 0;
-uint8_t hitBonus = 0;  // 2 = golpe perfecto (anillo dorado, "+2")
-#define BALL_ZONE_Y 230  // solo se golpea por debajo de esta linea
-#define BALL_PERFECT_Y 300  // por debajo: golpe perfecto, +2
+// BALL ("al vuelo"): caen Poke Ball y, con los puntos, Voltorb que hay que esquivar
+#define FALL_MAX 3
+#define FALL_CATCH_Y 352   // a esta altura el Pokemon puede atraparlo
+#define FALL_LOST_Y 404    // por debajo: perdido
+enum FallKind : uint8_t { FALL_BALL, FALL_VOLTORB };
+struct FallObj { float x, y, vy; uint8_t kind; bool alive; };
+FallObj falls[FALL_MAX];
+uint32_t fallNextAt = 0, fallStepAt = 0, ballHintUntil = 0;
+bool hitBad = false;           // el ultimo impacto fue un Voltorb
+int16_t ballTouchX = -1;       // sin acelerometro: el dedo guia al Pokemon
+uint32_t ballTouchUntil = 0;
 bool gameNewHi = false;
 uint8_t gameGain = 0;
 uint32_t catchUntil = 0, catchTargetUntil = 0;
@@ -1201,6 +1208,7 @@ void handleTouch() {
     if (!swallowGesture && clockOpen && !netOpen && (setPage == SETP_TIME || setPage == SETP_SOUND)) dialDrag(x, y);
     if (!swallowGesture && feedMenuUntil && !clockOpen && !cardOpen && !galleryOpen && !gameOpen) foodWheelDrag(x, y);
     if (!swallowGesture && gameOpen && gameMode == 3) cleanRub(x, y);
+    if (gameOpen && gameMode == 0 && !imuOk()) { ballTouchX = x; ballTouchUntil = millis() + 150; }
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
     if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && !helpOpen && !gameOpen && millis() - tStart > 3000 &&
         abs(tXl - tX0) < 30 && abs(tYl - tY0) < 30 && inPetZone(tX0, tY0) &&
@@ -2213,11 +2221,17 @@ void startGame() {
   gameNewHi = false;
   gameGain = 0;
   hitTime = 0;
-  ballLastHitAt = 0;
-  ballStepAt = 0;
-  hitBonus = 0;
-  gamePetX = 233;
-  respawnBall();
+  hitBad = false;
+  gamePetX = CX;
+  gamePetVX = 0;
+  for (auto &f : falls) f.alive = false;
+  uint32_t now = millis();
+  fallNextAt = now + 1500;
+  fallStepAt = 0;
+  ballHintUntil = now + 3500;
+  ballTouchUntil = 0;
+  float ax, ay, az;  // como se sujeta la placa al empezar cuenta como plano
+  if (imuAccel(&ax, &ay, &az)) { tiltNX = ax; tiltNY = ay; }
   sfxPlay(SFX_GAME_START);
 }
 
@@ -2312,6 +2326,7 @@ void startCleanGame() {
   cleanUntil = millis() + CLEAN_GAME_MS;
   cleanSpawnAt = millis();
   spawnCleanSpot();
+  spawnCleanSpot();
   sfxPlay(SFX_GAME_START);
 }
 
@@ -2385,28 +2400,6 @@ void startTypeGame() {
   sfxPlay(SFX_GAME_START);
 }
 
-void respawnBall() {
-  ballX = 112 + random(242);
-  ballY = 82;
-  float sp = 3.35f + gameScore * 0.14f;
-  if (sp > 8.4f) sp = 8.4f;
-  ballVX = random(2) ? sp : -sp;
-  ballVX += ((int)random(9) - 4) * 0.28f;
-  ballVY = 2.05f;
-}
-
-// zona de toque: se reduce con los puntos (50 -> 30 px)
-int ballHitRadius() {
-  int r = 50 - (gameScore * 20) / 25;
-  return r < 30 ? 30 : r;
-}
-
-// gravedad: crece con los puntos, asi la partida acelera de verdad
-float ballGravity() {
-  float g = 1.10f + gameScore * 0.07f;
-  return g > 3.4f ? 3.4f : g;
-}
-
 void gameTap(int16_t x, int16_t y) {
   if (gameMode == 1) {
     catchTap(x, y);
@@ -2424,51 +2417,16 @@ void gameTap(int16_t x, int16_t y) {
     typeTap(x, y);
     return;
   }
-  if (gameMode == 5) {  // INCLINA: un toque fija como "plano" la posicion actual
+  if (gameMode == 5 || gameMode == 0) {  // INCLINA y BALL: un toque fija como "plano" la posicion actual
     if (gameOverUntil) return;
     float ax, ay, az;
     if (imuAccel(&ax, &ay, &az)) { tiltNX = ax; tiltNY = ay; }
     tiltVX = tiltVY = 0;
+    gamePetVX = 0;
     tiltCalibUntil = millis() + 1200;
     sfxPlay(SFX_MENU);
     return;
   }
-  if (gameOverUntil) return;
-  float dx = ballX - x, dy = ballY - y;
-  int hitRadius = ballHitRadius();
-  uint32_t now = millis();
-  if (now - ballLastHitAt < 260) return;  // el mismo golpe no cuenta dos veces
-  bool onBall = dx * dx + dy * dy < hitRadius * hitRadius;
-  if (onBall && ballVY < -0.25f) return;  // aun sube tras el golpe: no cuenta, no castiga
-  if (!onBall || ballY < BALL_ZONE_Y) {
-    // tocar a ciegas cuesta una vida: el juego premia el momento justo, no la insistencia
-    ballLastHitAt = now;
-    ballMiss();
-    return;
-  }
-  bool perfect = ballY >= BALL_PERFECT_Y;
-  gameScore += perfect ? 2 : 1;
-  hitBonus = perfect ? 2 : 1;
-  sfxPlay(perfect ? SFX_MEDAL : SFX_MINIGAME_OK);
-  // el toque la manda a una altura al azar; con los puntos sube menos (menos tiempo
-  // para reaccionar). La velocidad sale de la gravedad actual.
-  int top = 96 + (gameScore > 30 ? 60 : gameScore * 2);
-  float apex = (float)top + random(90);
-  float rise = ballY - apex;
-  if (rise < 60.0f) rise = 60.0f;
-  ballVY = -sqrtf(2.0f * ballGravity() * rise);
-  float drift = 0.38f + (gameScore >= 6 ? 0.08f : 0.0f) + (gameScore >= 14 ? 0.10f : 0.0f);
-  float chaos = ((int)random(17) - 8) * 0.26f;
-  ballVX += dx * drift + chaos;
-  if (random(100) < 28) ballVX = -ballVX * (0.72f + random(45) * 0.01f);
-  float vxMax = 6.0f + gameScore * 0.15f;  // mas rapida de lado con los puntos
-  if (vxMax > 11.0f) vxMax = 11.0f;
-  if (ballVX > vxMax) ballVX = vxMax;
-  if (ballVX < -vxMax) ballVX = -vxMax;
-  hitX = ballX;
-  hitY = ballY;
-  hitTime = now;
-  ballLastHitAt = now;
 }
 
 void finishCatchGame() {
@@ -2585,6 +2543,7 @@ void cleanRub(int16_t x, int16_t y) {
     if (cleanDirt[i] > 0) continue;
     cleanAlive[i] = false;
     if (cleanActive) cleanActive--;
+    cleanSpawnAt = now + 120;  // piu veloce pulisci, prima arriva la prossima
     gameScore++;
     hitX = cleanX[i];
     hitY = cleanY[i];
@@ -2618,69 +2577,94 @@ void typeTap(int16_t x, int16_t y) {
   }
 }
 
-// vida perdida (al suelo o toque fallido)
-void ballMiss() {
-  if (++gameMisses >= 3) {
-    gameNewHi = (gameScore > pet.gameHi);
-    pet.playResult(gameScore);  // actualiza el record y da felicidad
-    sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
-    gameOverUntil = millis() + 4000;
-  } else {
-    respawnBall();
-    sfxPlay(SFX_BALL_MISS);
-  }
+void finishBallGame() {
+  gameNewHi = (gameScore > pet.gameHi);
+  pet.playResult(gameScore);  // actualiza el record y da felicidad
+  sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+  gameOverUntil = millis() + 4000;
 }
 
-// un paso de fisica; f = tiempo transcurrido en unidades de 115 ms (el ritmo original)
-static bool ballPhysics(float f) {
-  float grav = ballGravity();
-  ballVX += sinf((millis() + gameScore * 97) * 0.018f) * 0.11f * f;
-  if (random(1000) < (int)(70 * f)) ballVX += ((int)random(7) - 3) * 0.22f;
-  ballVY += grav * f;
-  ballX += ballVX * f;
-  ballY += ballVY * f;
-  // rebote en la pared circular
-  float dx = ballX - CX, dy = ballY - CY;
-  float d = sqrtf(dx * dx + dy * dy);
-  if (d > 205) {
-    float nx = dx / d, ny = dy / d;
-    float dot = ballVX * nx + ballVY * ny;
-    if (dot > 0) {
-      // la pared absorbe energia (antes la anadia y la bola podia subir sin fin)
-      ballVX = (ballVX - 2 * dot * nx) * 0.9f;
-      ballVY = (ballVY - 2 * dot * ny) * 0.85f;
-      ballVX += ((int)random(9) - 4) * 0.18f;
-      sfxPlay(SFX_BALL_BOUNCE);
-    }
-    ballX = CX + nx * 205;
-    ballY = CY + ny * 205;
+static void spawnFall(uint32_t now) {
+  for (auto &f : falls) {
+    if (f.alive) continue;
+    f.alive = true;
+    f.x = 112 + random(242);
+    f.y = 70;
+    float sp = 115.0f + gameScore * 9.0f;  // px/s: cada vez mas rapido
+    if (sp > 390.0f) sp = 390.0f;
+    f.vy = sp * (0.9f + random(21) * 0.01f);
+    int bad = gameScore < 5 ? 0 : 15 + gameScore;  // Voltorb desde 5 puntos
+    if (bad > 38) bad = 38;
+    f.kind = (int)random(100) < bad ? FALL_VOLTORB : FALL_BALL;
+    break;
   }
-  if (ballY < 82 && ballVY < 0) {  // techo suave: nunca por encima de la salida
-    ballY = 82;
-    ballVY = -ballVY * 0.4f;
-  }
-  if (ballY > 384) {  // al suelo
-    ballMiss();
-    return false;
-  }
-  return true;
+  int gap = 1500 - gameScore * 45;  // cae algo cada vez mas a menudo
+  if (gap < 520) gap = 520;
+  fallNextAt = now + gap + random(260);
 }
 
 void stepGame() {
   uint32_t now = millis();
-  float f = ballStepAt ? (now - ballStepAt) / 115.0f : 0.35f;
-  ballStepAt = now;
-  if (f > 2.5f) f = 2.5f;  // tras una pausa larga (SD, guardado) no salta de golpe
-  while (f > 0 && !gameOverUntil) {  // pasos cortos: la pared y el suelo no se saltan
-    float st = f > 0.4f ? 0.4f : f;
-    f -= st;
-    if (!ballPhysics(st)) break;
+  float dt = fallStepAt ? (now - fallStepAt) / 1000.0f : 0.04f;
+  fallStepAt = now;
+  if (dt > 0.12f) dt = 0.12f;  // tras una pausa larga (SD, guardado) no salta de golpe
+  // el Pokemon: inclinando la placa (como INCLINA); sin acelerometro, sigue el dedo
+  float target = 0;
+  float ax, ay, az;
+  if (deadlineActive(now, ballTouchUntil) && ballTouchX >= 0) {
+    target = (ballTouchX - gamePetX) * 6.0f;
+  } else if (imuAccel(&ax, &ay, &az)) {
+    target = (ay - tiltNY) * TILT_SIGN_X * 1100.0f;  // pantalla X <- sensor Y
   }
-  // el bicho la sigue por abajo
-  float chase = (ballX - gamePetX) * 0.12f;
-  if (chase > 7) chase = 7;
-  if (chase < -7) chase = -7;
-  gamePetX += chase;
+  if (target > 430) target = 430;
+  if (target < -430) target = -430;
+  gamePetVX += (target - gamePetVX) * 0.3f;
+  gamePetX += gamePetVX * dt;
+  if (gamePetX < 96) { gamePetX = 96; gamePetVX = 0; }
+  if (gamePetX > 370) { gamePetX = 370; gamePetVX = 0; }
+  if (gameOverUntil) return;
+  if (deadlineReached(now, fallNextAt)) spawnFall(now);
+  int catchR = 46 - gameScore / 2;
+  if (catchR < 32) catchR = 32;
+  for (auto &f : falls) {
+    if (!f.alive) continue;
+    f.y += f.vy * dt;
+    if (f.y >= FALL_CATCH_Y && f.y < FALL_LOST_Y && fabsf(f.x - gamePetX) < catchR) {
+      f.alive = false;
+      hitX = f.x;
+      hitY = f.y;
+      hitTime = now;
+      if (f.kind == FALL_VOLTORB) {  // atrapar un Voltorb: explota y se acaba
+        hitBad = true;
+        sfxPlay(SFX_MINIGAME_BAD);
+        finishBallGame();
+        return;
+      }
+      hitBad = false;
+      gameScore++;
+      sfxPlay(SFX_MINIGAME_OK);
+      continue;
+    }
+    if (f.y >= FALL_LOST_Y) {
+      f.alive = false;
+      if (f.kind == FALL_VOLTORB) continue;  // esquivado: bien
+      if (++gameMisses >= 3) { finishBallGame(); return; }
+      sfxPlay(SFX_BALL_MISS);
+    }
+  }
+}
+
+// Voltorb dibujado: mitad roja arriba, blanca abajo, ojos enfadados
+static void drawVoltorb(int cx, int cy, int r) {
+  gfx->fillCircle(cx, cy, r, C565(0xe0, 0x40, 0x38));
+  for (int dy = 1; dy <= r; dy++) {
+    int w = (int)sqrtf((float)(r * r - dy * dy));
+    gfx->drawFastHLine(cx - w, cy + dy, 2 * w + 1, UI_WHITE);
+  }
+  gfx->drawFastHLine(cx - r, cy, 2 * r + 1, INK_K);
+  gfx->drawCircle(cx, cy, r, INK_K);
+  gfx->fillTriangle(cx - r / 2 - 3, cy - r / 2, cx - 3, cy - r / 4, cx - r / 2 - 1, cy - 2, INK_K);
+  gfx->fillTriangle(cx + r / 2 + 3, cy - r / 2, cx + 3, cy - r / 4, cx + r / 2 + 1, cy - 2, INK_K);
 }
 
 // ---------- saco de entrenamiento (entrena la fuerza) ----------
@@ -2997,23 +2981,12 @@ void renderCleanGame() {
     drawGameResult(T(S_RECORD_FMT), pet.cleanHi, S_HYG_GAIN_FMT);
     return;
   }
-  if (deadlineReached(now, cleanUntil) || gameMisses >= 3) {
+  if (deadlineReached(now, cleanUntil)) {
     finishCleanGame();
     return;
   }
-  // una mancha que se queda demasiado se extiende: fallo
-  uint32_t life = 7500 - (uint32_t)(gameScore > 20 ? 20 : gameScore) * 150;
-  for (uint8_t i = 0; i < 4; i++) {
-    if (!cleanAlive[i] || now - cleanBorn[i] < life) continue;
-    cleanAlive[i] = false;
-    if (cleanActive) cleanActive--;
-    if (++gameMisses >= 3) { finishCleanGame(); return; }
-    sfxPlay(SFX_MINIGAME_BAD);
-  }
-  if (deadlineReached(now, cleanSpawnAt)) {
-    if (cleanActive < 3) spawnCleanSpot();
-    cleanSpawnAt = now + 1600 - (gameScore > 12 ? 600 : gameScore * 50);
-  }
+  // sin vidas: siempre dos manchas; la siguiente sale en cuanto limpias una
+  if (cleanActive < 2 && deadlineReached(now, cleanSpawnAt)) spawnCleanSpot();
   drawGameScene();
   bool night = sceneHour() < 6 || sceneHour() >= 20;
   uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
@@ -3029,18 +3002,12 @@ void renderCleanGame() {
   gfx->print(score);
   gfx->setCursor(392 - (int)strlen(rec) * 12, 78);
   gfx->print(rec);
-  for (int i = 0; i < 3; i++) {
-    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
-    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
-  }
   for (uint8_t i = 0; i < 4; i++) {
     if (!cleanAlive[i]) continue;
-    // la mancha encoge mientras se frota y se pone roja cuando esta a punto de extenderse
+    // la mancha encoge mientras se frota
     int r = 12 + (int)(26L * cleanDirt[i] / (cleanDirt0[i] ? cleanDirt0[i] : 1));
-    bool late = now - cleanBorn[i] > life * 2 / 3;
     gfx->fillCircle(cleanX[i], cleanY[i], r, C565(0x8a, 0x66, 0x45));
-    gfx->drawCircle(cleanX[i], cleanY[i], r + 2, late ? UI_BAR_BAD : UI_INK);
-    if (late) gfx->drawCircle(cleanX[i], cleanY[i], r + 4, UI_BAR_BAD);
+    gfx->drawCircle(cleanX[i], cleanY[i], r + 2, UI_INK);
     gfx->fillCircle(cleanX[i] - r / 3, cleanY[i] - r / 3, r / 5 + 1, C565(0x62, 0x45, 0x2e));
     gfx->fillCircle(cleanX[i] + r / 3, cleanY[i] + r / 6, r / 4 + 1, C565(0x62, 0x45, 0x2e));
   }
@@ -3374,7 +3341,7 @@ void renderGame() {
   }
 
   if (pmd.loaded) {
-    uint8_t act = (ballX > gamePetX + 4) ? PMD_WALKR : (ballX < gamePetX - 4) ? PMD_WALKL : PMD_IDLE;
+    uint8_t act = gamePetVX > 25 ? PMD_WALKR : gamePetVX < -25 ? PMD_WALKL : PMD_IDLE;
     if (!pmd.has(act)) act = PMD_IDLE;
     drawPmdAct(act, (int)gamePetX, 394, millis(), true, false, 3);
   } else if (mon.loaded) {
@@ -3392,25 +3359,41 @@ void renderGame() {
       }
   }
 
-  // zona de golpe: linea discontinua; por debajo de la segunda, golpe perfecto
-  for (int x = 50; x < 416; x += 16) gfx->drawFastHLine(x, BALL_ZONE_Y, 8, ink);
-  for (int x = 80; x < 386; x += 12) gfx->drawFastHLine(x, BALL_PERFECT_Y, 4, UI_BAR_WARN);
+  // lo que cae
+  for (auto &f : falls) {
+    if (!f.alive) continue;
+    if (f.kind == FALL_VOLTORB) drawVoltorb((int)f.x, (int)f.y, 20);
+    else drawMap(SPR_ICON_PLAY, 16, (int)f.x - 24, (int)f.y - 24, 3, false);
+  }
 
-  // anillo de impacto que se expande y desvanece (dorado y "+2" si fue perfecto)
+  // anillo de la captura (rojo si fue un Voltorb)
   uint32_t ht = millis() - hitTime;
   if (hitTime && ht < 420) {
     int rad = 22 + (int)(ht / 6);
-    bool gold = hitBonus == 2;
-    gfx->drawCircle((int)hitX, (int)hitY, rad, gold ? UI_BAR_WARN : C565(0xff, 0xe7, 0x9f));
-    gfx->drawCircle((int)hitX, (int)hitY, rad - 2, gold ? UI_BAR_WARN : C565(0xff, 0xd9, 0x8a));
-    gfx->setTextSize(2);
-    gfx->setTextColor(gold ? UI_BAR_WARN : ink);
-    gfx->setCursor((int)hitX - 12, (int)hitY - 52 - (int)(ht / 20));
-    gfx->print(gold ? "+2" : "+1");
+    uint16_t rc = hitBad ? UI_BAR_BAD : C565(0xff, 0xd9, 0x8a);
+    gfx->drawCircle((int)hitX, (int)hitY, rad, rc);
+    gfx->drawCircle((int)hitX, (int)hitY, rad - 2, rc);
+    if (!hitBad) {
+      gfx->setTextSize(2);
+      gfx->setTextColor(ink);
+      gfx->setCursor((int)hitX - 12, (int)hitY - 52 - (int)(ht / 20));
+      gfx->print("+1");
+    }
   }
 
-  // la pokeball
-  drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
+  // primeros segundos / tras recalibrar: como se juega
+  uint32_t nowMs = millis();
+  if (deadlineActive(nowMs, tiltCalibUntil) || deadlineActive(nowMs, ballHintUntil)) {
+    const char *l1 = deadlineActive(nowMs, tiltCalibUntil) ? T(S_TILT_CALIB) : T(S_BALL_CATCH);
+    const char *l2 = deadlineActive(nowMs, tiltCalibUntil) ? "" : T(S_BALL_AVOID);
+    gfx->setTextColor(ink);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(l1) * 6, 170);
+    gfx->print(l1);
+    gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(l2) * 3, 196);
+    gfx->print(l2);
+  }
 
   flushStampedFrame();
 }
@@ -4153,7 +4136,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   {
     { "Comida baja = descuido.", "Jugar sube alegria.", "Bano limpia suciedad.", "Tocar da alegria/vinc.", "Peso alto te frena.", "Caramelo: -1 descuido." },
     { "Dormir recupera energia.", "Durmiendo todo baja lento.", "Cama solo 19:00-9:00.", "PWR: atras; en casa bloq.", "Ahorro usa light sleep.", "Sin borrar conserva save." },
-    { "Bola: toca la bola.", "Atrapa: toca iconos.", "Memo: repite secuencia.", "Limpia: toca manchas.", "Tipo: elige ventaja.", "Dan records y entreno." },
+    { "Bola: inclina, atrapa.", "Atrapa: toca iconos.", "Memo: repite secuencia.", "Limpia: frota manchas.", "Tipo: elige ventaja.", "Dan records y entreno." },
     { "Rapido: menos dano.", "Rival esquiva poco.", "Recibes algo menos dano.", "Fuerte: mas dano.", "Riesgo y contra mayor.", "No siempre conviene." },
     { "Esquivar evita dano.", "Si sale: Contra listo.", "Prox ataque pega mas.", "Ruhe/Descanso cura 2x.", "Tambien da Guardia.", "Tipos suben/bajan dano." },
     { "Pokedex: desliza lado.", "Criado y atrapado cuentan.", "10/25/50/100/151/160/200/251/300/386: marcos.", "Perfil: elige marco.", "Detalle conocido: chirp.", "SONIDO TODO: toca pet." },
@@ -4163,7 +4146,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   {
     { "Low food = slip-up.", "Play raises joy.", "Bath cleans dirt.", "Petting gives joy/bond.", "High weight slows you.", "Candy: 3 goals, -1 slip." },
     { "Sleep restores energy.", "Needs decay slower asleep.", "Bed only 19:00-9:00.", "PWR: back; locks at home.", "Power Save light-sleeps.", "No erase keeps saves." },
-    { "Ball: tap the ball.", "Catch: tap icons.", "Memo: repeat sequence.", "Clean: tap stains.", "Type: pick advantage.", "Records and training." },
+    { "Ball: tilt to catch.", "Catch: tap icons.", "Memo: repeat sequence.", "Clean: rub the stains.", "Type: pick advantage.", "Records and training." },
     { "Quick: lower damage.", "Enemy dodges less.", "You take less damage.", "Heavy: more damage.", "More risk/counterplay.", "Not always best." },
     { "Dodge avoids damage.", "Success: Counter ready.", "Next attack hits harder.", "Rest heals only 2x.", "Rest also gives Guard.", "Types change damage." },
     { "Pokedex: side swipe.", "Raised and caught count.", "10/25/50/100/151/160/200/251/300/386: frames.", "Profile: choose frame.", "Known detail: species chirp.", "SOUND FULL: tap pet." },
@@ -4173,7 +4156,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   {
     { "Faim basse = erreur.", "Jouer monte la joie.", "Bain nettoie.", "Caresse donne lien/joie.", "Poids haut ralentit.", "Bonbon: -1 erreur." },
     { "Sommeil rend energie.", "Besoins baissent moins.", "Dodo seulement 19h-9h.", "PWR: retour; verrou accueil", "Eco utilise light sleep.", "Sans erase garde save." },
-    { "Balle: touche la balle.", "Attrape: touche icones.", "Memo: repete sequence.", "Nettoie: touche taches.", "Type: choisis avantage.", "Records et entrainement." },
+    { "Balle: incline, attrape.", "Attrape: touche icones.", "Memo: repete sequence.", "Nettoie: frotte taches.", "Type: choisis avantage.", "Records et entrainement." },
     { "Rapide: degats bas.", "Ennemi esquive moins.", "Tu subis moins.", "Fort: degats hauts.", "Risque plus grand.", "Pas toujours meilleur." },
     { "Esquive evite degats.", "Succes: Contre pret.", "Prochaine attaque plus.", "Repos soigne 2 fois.", "Repos donne Garde.", "Types changent degats." },
     { "Pokedex: glisse cote.", "Eleve et capture comptent.", "10/25/50/100/151/160/200/251/300/386: cadres.", "Profil: choisis cadre.", "Detail connu: chirp.", "SON TOUT: touche pet." },
@@ -4183,7 +4166,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   {
     { "Food 0 = Patzer.", "Spielen hebt Freude.", "Bad reinigt Hygiene.", "Streicheln gibt Bond.", "Hohes Gewicht bremst.", "Bonbon: -1 Patzer." },
     { "Schlaf gibt Energie.", "Needs sinken langsamer.", "Bett nur 19-9 Uhr.", "PWR: zurueck; Start sperrt", "Sparen nutzt Light Sleep.", "Ohne Erase bleibt Save." },
-    { "Ball: Ball antippen.", "Fangen: Icons treffen.", "Memo: Folge merken.", "Putzen: Flecken tippen.", "Typ: Vorteil waehlen.", "Gibt Rekorde/Training." },
+    { "Ball: neigen, fangen.", "Fangen: Icons treffen.", "Memo: Folge merken.", "Putzen: Flecken reiben.", "Typ: Vorteil waehlen.", "Gibt Rekorde/Training." },
     { "Schnell: weniger Schaden.", "Gegner weicht selten aus.", "Du kassierst weniger.", "Stark: mehr Schaden.", "Mehr Risiko/Gegendruck.", "Nicht immer beste Wahl." },
     { "Ausweichen meidet Schaden.", "Klappt es: Konter bereit.", "Naechster Angriff staerker.", "Ruhen heilt nur 2x.", "Ruhen gibt auch Schutz.", "Typen aendern Schaden." },
     { "Pokedex: seitlich wischen.", "Aufz./gefangen zaehlen.", "10/25/50/100/151/160/200/251/300/386: Rahmen.", "Profil: Rahmen waehlen.", "Bekanntes Detail: Chirp.", "TON VOLL: Pet tippen." },
@@ -4193,7 +4176,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   {
     { "Cibo 0 = errore.", "Gioca aumenta gioia.", "Bagno pulisce.", "Carezza da legame.", "Peso alto rallenta.", "Caramella: -1 svista." },
     { "Sonno da energia.", "Bisogni calano meno.", "Letto solo 19:00-9:00.", "PWR: indietro; blocca home", "Risparmio usa light sleep.", "Senza erase salva." },
-    { "Palla: tocca palla.", "Prendi: tocca icone.", "Memo: ripeti sequenza.", "Pulisci: tocca macchie.", "Tipo: scegli vantaggio.", "Record e allenamento." },
+    { "Palla: inclina, prendi.", "Prendi: tocca icone.", "Memo: ripeti sequenza.", "Pulisci: strofina.", "Tipo: scegli vantaggio.", "Record e allenamento." },
     { "Rapido: meno danni.", "Nemico schiva meno.", "Subisci meno danni.", "Forte: piu danni.", "Piu rischio.", "Non sempre migliore." },
     { "Schiva evita danni.", "Successo: contro pronto.", "Prox attacco piu forte.", "Riposo cura solo 2x.", "Riposo da Guardia.", "Tipi cambiano danni." },
     { "Pokedex: scorri lato.", "Allevato e preso contano.", "10/25/50/100/151/160/200/251/300/386: cornici.", "Profilo: scegli cornice.", "Dettaglio noto: chirp.", "SUONO TUTTO: tocca pet." },
@@ -4203,7 +4186,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
   {
     { "Comida 0 = falha.", "Jogar sobe alegria.", "Banho limpa.", "Carinho da vinculo.", "Peso alto atrasa.", "Bala: -1 falha." },
     { "Sono da energia.", "Necessidades caem menos.", "Cama so 19:00-9:00.", "PWR: voltar; bloqueia home", "Poupanca usa light sleep.", "Sem erase guarda save." },
-    { "Bola: toque na bola.", "Pegar: toque icones.", "Memo: repita sequencia.", "Limpa: toque manchas.", "Tipo: escolha vantagem.", "Recordes e treino." },
+    { "Bola: incline, pegue.", "Pegar: toque icones.", "Memo: repita sequencia.", "Limpa: esfregue.", "Tipo: escolha vantagem.", "Recordes e treino." },
     { "Rapido: dano menor.", "Rival desvia menos.", "Voce recebe menos.", "Forte: dano maior.", "Mais risco.", "Nem sempre melhor." },
     { "Desviar evita dano.", "Sucesso: contra pronto.", "Prox ataque mais forte.", "Descanso cura so 2x.", "Descanso da Guarda.", "Tipos mudam dano." },
     { "Pokedex: deslize lado.", "Criado e apanhado contam.", "10/25/50/100/151/160/200/251/300/386: molduras.", "Perfil: escolha moldura.", "Detalhe conhecido: chirp.", "SOM TUDO: toque pet." },
