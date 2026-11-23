@@ -112,6 +112,8 @@ An update must never force a reinstall over USB:
 - profile, personality, medals, collector ranks and cosmetic frames
 - step counter with daily rewards (500 / 2,000 / 5,000 steps) and lifetime trail
   ranks; walking also raises JOY and BOND within daily caps
+- slip-ups only after 6 hours in a row with an empty need (each one raises the
+  evolution level by one; a candy removes one)
 - RTC-based day/night and offline progression
 - synthetic species chirps and sound effects; no game audio or ROM samples
 - browser save backup/restore in the web installer

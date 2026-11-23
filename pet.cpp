@@ -91,7 +91,7 @@ void Pet::newEgg() {
   evoDeclinedAge = 0;
   farDeclinedAge = 0;
   careMistakes = 0;
-  mistakeCooldown = 0;
+  lowMinutes = 0;
   sleeping = false;
   save();
 }
@@ -223,18 +223,22 @@ void Pet::tick() {
   if (hygiene < 30) dJoy -= 2;
   joy = clamp100(joy + dJoy);
 
-  // Descuido: dejar una estadistica por los suelos cuenta como error de
-  // cuidado (con enfriamiento para no contar el mismo descuido cada minuto)
-  if (mistakeCooldown > 0) mistakeCooldown--;
-  if (lowestStat() <= 10 && mistakeCooldown == 0) {
-    careMistakes++;
-    mistakeCooldown = 30;
-    if (bond > 3) bond -= 3;  // el descuido enfria el vinculo
+  // Descuido: una necesidad por los suelos (<= 10) durante 6 h seguidas con el
+  // bicho despierto. Mirarlo por la manana, a mediodia y por la tarde basta;
+  // olvidarlo un dia entero no. Durmiendo (y apagado) no cuenta.
+  if (lowestStat() <= 10) {
+    if (++lowMinutes >= MISTAKE_LOW_MINUTES) {
+      careMistakes++;
+      lowMinutes = 0;
+      if (bond > 3) bond -= 3;  // el descuido enfria el vinculo
+    }
+  } else {
+    lowMinutes = 0;
   }
 
   checkMedals();  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
 
-  // abandono total: con TODO a cero durante una hora queda lista para escaparse;
+  // abandono total: con TODO a cero durante 12 h (despierta) queda lista para escaparse;
   // NO se va sola, la dispara el usuario con el boton (final triste, lo presencia)
   if (fullness == 0 && joy == 0 && energy == 0 && hygiene == 0) {
     if (neglectTicks < RUNAWAY_TICKS) neglectTicks++;
@@ -661,7 +665,7 @@ bool Pet::canFarewellNow() const {
          !hasEvolutionPath(speciesId) && ageMinutes >= FAREWELL_AGE_MIN;
 }
 
-// abandono total durante 1h: lista para escaparse. La dispara el usuario con el
+// abandono total durante 12 h: lista para escaparse. La dispara el usuario con el
 // boton (final triste); cuidarla un solo tick la salva (neglectTicks se resetea)
 bool Pet::canRunawayNow() const {
   return !isEgg() && !sleeping && ceremony == CER_NONE && neglectTicks >= RUNAWAY_TICKS;
@@ -1109,6 +1113,14 @@ uint8_t Pet::interactPet(bool eveningBonus) {
   noteDailyGoal(DAILY_GOAL_CARE, 1);
   save();
   return result;
+}
+
+uint8_t Pet::shakeStatus() const {
+  if (sleeping) return 1;
+  if (deadlineActive(millis(), shakeReadyAt)) return 2;
+  uint32_t d = today();
+  if (d && d == shakeDay && shakeCountToday >= 8) return 3;
+  return 0;
 }
 
 bool Pet::applyShake() {
