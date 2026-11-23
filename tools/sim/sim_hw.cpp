@@ -24,6 +24,25 @@ SimEsp ESP;
 TwoWire Wire;
 SDMMCFS SD_MMC;
 SimTouchState gSimTouch;
+int gSimGpsFix = -1;
+
+static std::string nmeaLine(const std::string &body) {
+  unsigned char sum = 0;
+  for (char c : body) sum ^= (unsigned char)c;
+  char tail[8];
+  snprintf(tail, sizeof(tail), "*%02X\r\n", sum);
+  return "$" + body + tail;
+}
+
+std::string simGpsNmea() {  // what the fake LC76G sends every second
+  if (gSimGpsFix <= 0)
+    return nmeaLine("GNGGA,101530.000,,,,,0,00,99.0,,M,,M,,") +
+           nmeaLine("GPGSV,1,1,04,01,40,083,,02,17,308,,03,13,172,,04,09,034,") +
+           nmeaLine("GNRMC,101530.000,V,,,,,,,231126,,,N");
+  return nmeaLine("GNGGA,101531.000,4527.9420,N,00911.4100,E,1,09,0.8,122.5,M,47.0,M,,") +
+         nmeaLine("GPGSV,3,1,11,01,40,083,40,02,17,308,35,03,13,172,30,04,09,034,28") +
+         nmeaLine("GNRMC,101531.000,A,4527.9420,N,00911.4100,E,0.10,0.00,231126,,,A");
+}
 SimConfig gSim;
 
 static uint32_t rngState = 12345;

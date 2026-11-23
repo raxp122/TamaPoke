@@ -65,6 +65,8 @@ Swipe down for a menu of big buttons:
 - **Sound & screen**: sound level, power saving, language (6 languages).
 - **Wi-Fi**: saved networks and automatic update check.
 - **Update**: installed and available version, check and install.
+- **GPS** (`-G` board only): status, coordinates, altitude, satellites and UTC
+  time of the GNSS module (needs its ceramic antenna and open sky).
 - **Help** and **Info** (firmware, save, microSD, last save time, slowest loop).
 
 ## Wi-Fi and updates

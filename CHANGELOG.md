@@ -6,6 +6,13 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **GPS** (`-G` board): Settings › GPS shows the status, latitude/longitude,
+  altitude, satellites and UTC time of the LC76G module; for the first five
+  minutes after start-up the position is also written to the serial log.
+  Boards without the module show "No GPS module".
+
+## Unreleased number (merged before GPS)
+
 - Settings › Time: time zone and **summer time** (auto / always on / always off)
   next to the manual clock; the Wi-Fi page shows only the sync status.
 - README rewritten for this fork; this changelog.

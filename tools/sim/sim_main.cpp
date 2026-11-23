@@ -10,6 +10,7 @@
 //   hold X Y MS          finger held still for MS
 //   swipe X0 Y0 X1 Y1 [MS]
 //   rotate CX CY R DEG0 DEG1 [MS]  finger moving along an arc (DEG1 > DEG0: clockwise)
+//   gps none|search|fix  fake LC76G on the I2C bus (set it before the first command)
 //   pwr                  short press of the power button
 //   ota STATE            fake update state: idle | checking | uptodate | available | sprites | firmware | error
 //   shot NAME            save out/NAME.png and add NAME to the layout report
@@ -189,6 +190,7 @@ static int otaFromName(const std::string &s) {
 }
 
 static std::string shotName;
+static bool booted = false;
 
 static void runScript(const std::string &path) {
   std::ifstream in(path);
@@ -202,6 +204,7 @@ static void runScript(const std::string &path) {
     std::istringstream ss(line);
     std::string cmd;
     if (!(ss >> cmd)) continue;
+    if (!booted && cmd != "gps") { setup(); booted = true; step(1500); }
     int a = 0, b = 0, c = 0, d = 0, e = 0;
     if (cmd == "wait") { ss >> a; step(a); }
     else if (cmd == "tap") { ss >> a >> b; touchPath(a, b, a, b, 80); step(250); }
@@ -225,6 +228,7 @@ static void runScript(const std::string &path) {
       step(400);
     }
     else if (cmd == "rotshot") { ss >> shotName; }  // next rotate takes a shot while the finger is still turning
+    else if (cmd == "gps") { std::string m; ss >> m; gSimGpsFix = m == "fix" ? 1 : (m == "search" ? 0 : -1); if (!booted) { setup(); booted = true; step(1500); } }
     else if (cmd == "pwr") { gSim.pwrPressed = true; step(600); }
     else if (cmd == "ota") { std::string s; ss >> s; gSim.otaStatus = otaFromName(s); step(400); }
     else if (cmd == "shot") { std::string n; ss >> n; step(700); shot(n); }
@@ -244,8 +248,6 @@ int main(int argc, char **argv) {
   report = fopen((outDir + "/layout-report.md").c_str(), "w");
   if (!report) { fprintf(stderr, "output folder %s missing\n", outDir.c_str()); return 2; }
   fprintf(report, "# Layout report\n\nOUTSIDE: text or box drawn beyond the round panel. SMALL: button (outlined rounded box) under 44 px, hard to tap.\n\n");
-  setup();
-  step(1500);
   for (auto &s : scripts) runScript(s);
   fprintf(report, "Total: %d outside, %d small\n", totalOutside, totalSmall);
   fclose(report);

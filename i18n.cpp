@@ -76,6 +76,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "AJUSTES", "SONIDO Y PANTALLA",
     "Gira el dedo para pasar",
     "Hora verano: auto", "Hora verano: si", "Hora verano: no",
+    "Sin modulo GPS (solo -G)", "Buscando satelites...", "Posicion encontrada", "Necesita antena y cielo abierto",
   },
   // ---------------- EN ----------------
   {
@@ -145,6 +146,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "SETTINGS", "SOUND & SCREEN",
     "Circle your finger to browse",
     "Summer time: auto", "Summer time: on", "Summer time: off",
+    "No GPS module (-G only)", "Searching satellites...", "Position found", "Needs the antenna and open sky",
   },
   // ---------------- FR ----------------
   {
@@ -214,6 +216,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "REGLAGES", "SON ET ECRAN",
     "Tourne le doigt pour defiler",
     "Heure d'ete: auto", "Heure d'ete: oui", "Heure d'ete: non",
+    "Pas de GPS (modele -G)", "Recherche satellites...", "Position trouvee", "Antenne et ciel degage requis",
   },
   // ---------------- DE ----------------
   {
@@ -283,6 +286,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "EINSTELLUNGEN", "TON & ANZEIGE",
     "Finger kreisen: blaettern",
     "Sommerzeit: auto", "Sommerzeit: an", "Sommerzeit: aus",
+    "Kein GPS-Modul (nur -G)", "Suche Satelliten...", "Position gefunden", "Braucht Antenne und freien Himmel",
   },
   // ---------------- IT ----------------
   {
@@ -352,6 +356,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "IMPOSTAZIONI", "SUONO E SCHERMO",
     "Gira il dito per scorrere",
     "Ora legale: auto", "Ora legale: si", "Ora legale: no",
+    "Nessun GPS (solo -G)", "Ricerca satelliti...", "Posizione trovata", "Serve l'antenna e cielo aperto",
   },
   // ---------------- PT ----------------
   {
@@ -421,6 +426,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "AJUSTES", "SOM E TELA",
     "Gire o dedo para navegar",
     "Horario verao: auto", "Horario verao: sim", "Horario verao: nao",
+    "Sem modulo GPS (so -G)", "Procurando satelites...", "Posicao encontrada", "Precisa de antena e ceu aberto",
   },
 };
 

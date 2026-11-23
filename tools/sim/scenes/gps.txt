@@ -1,0 +1,12 @@
+# -G board: fake LC76G, first searching then with a position
+gps search
+tap 233 150
+tap 233 233
+wait 2000
+swipe 233 100 233 380
+tap 233 284
+wait 3000
+shot 50_gps_searching
+gps fix
+wait 3000
+shot 51_gps_fix
