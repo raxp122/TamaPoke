@@ -57,9 +57,10 @@ pwr
 swipe 233 100 233 380
 tap 372 122
 tap 233 233
-tap 233 128
-tap 233 200
-tap 233 272
+tap 383 295
+swipe 233 360 233 120
+tap 383 295
+tap 83 295
 pwr
 pwr
 wait 300000

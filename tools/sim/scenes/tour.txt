@@ -59,10 +59,22 @@ swipe 233 100 233 380
 shot 30_settings
 tap 233 233
 shot 30a_settings_time
+tap 383 295
+rotshot 30a2_time_dial_turning
+rotate 233 233 200 -60 30 700
+swipe 233 360 233 120
+swipe 233 360 233 120
+shot 30a3_time_zone
+tap 383 295
+swipe 233 360 233 120
+shot 30a4_time_dst
 pwr
 tap 372 122
 tap 233 233
 shot 30b_settings_sound
+swipe 233 360 233 120
+swipe 233 360 233 120
+shot 30b2_sound_language
 pwr
 tap 59 273
 tap 233 233
