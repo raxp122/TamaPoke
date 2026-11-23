@@ -193,8 +193,10 @@ uint8_t catchIcon = 0;
 #define TILT_FIELD_R 182      // radio del campo (centro de la pantalla)
 #define TILT_BALL_R 16
 #define TILT_HOLES 3
-#define TILT_SIGN_X -1.0f      // el acelerometro mide la reaccion a la gravedad: lado bajado = valor negativo
-#define TILT_SIGN_Y -1.0f
+// el sensor esta girado 90 grados respecto a la pantalla (probado en la placa):
+// horizontal de la pantalla = -Y del sensor, vertical = +X del sensor
+#define TILT_SIGN_X -1.0f      // pantalla X <- sensor Y
+#define TILT_SIGN_Y 1.0f       // pantalla Y <- sensor X
 float tiltBX = 233, tiltBY = 233, tiltVX = 0, tiltVY = 0;
 float tiltNX = 0, tiltNY = 0;  // "plano" = como se sujetaba la placa al empezar
 int16_t tiltBerryX = 233, tiltBerryY = 160;
@@ -3012,8 +3014,8 @@ static void stepTiltGame(uint32_t now) {
   float x, y, z;
   if (imuAccel(&x, &y, &z)) {
     // 0,25 g de inclinacion ~ 1 px por frame^2
-    tiltVX += (x - tiltNX) * TILT_SIGN_X * 4.0f;
-    tiltVY += (y - tiltNY) * TILT_SIGN_Y * 4.0f;
+    tiltVX += (y - tiltNY) * TILT_SIGN_X * 4.0f;
+    tiltVY += (x - tiltNX) * TILT_SIGN_Y * 4.0f;
   }
   tiltVX *= 0.95f;
   tiltVY *= 0.95f;

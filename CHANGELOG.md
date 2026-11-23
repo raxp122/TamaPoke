@@ -6,8 +6,12 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
-- **Tilt**: the ball now rolls towards the side you lower (both axes were
-  reversed); tap the screen to set the current position as flat (useful if
+- **Tilt**: the sensor is mounted turned by 90 degrees: tilting up, down,
+  left and right now moves the ball that way (1.37.52 still mixed the axes).
+
+## 1.37.52 — Ball, Clean, candy, frame, battery
+
+- **Tilt**: axis signs reversed (not enough, see above); tap the screen to set the current position as flat (useful if
   the ball keeps rolling: hold the board level and tap).
 - **Ball**: smooth movement (physics follows real time, 25 frames per
   second). The ball can be hit only below the dashed line; a tap that misses
