@@ -6,6 +6,19 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Food wheel**: the food button opens a wheel like the settings one with
+  **Razz, Oran and Lum Berry**, a **Potion** and the candy (when you have one),
+  with new pixel-art icons. A berry gives +25 FOOD; the favourite one +40 and no
+  hunger for an hour, but no more joy or energy: joy comes from the games,
+  energy from sleep at night or from Potions (+30, no limit) during the day.
+- **Sleep at night**: the light button puts the Pokémon to bed only between
+  19:00 and 9:00 ("Not sleepy" otherwise); at 9:00 it wakes up by itself
+  ("Good morning!"). Less than 8 hours of sleep in that window with the board
+  on is a slip-up ("Slept too little!"). A board switched off never counts.
+- Help: the sleep and candy lines describe the new rules.
+
+## 1.37.69 — Type quiz, less poop
+
 - **Type**: Pokémon with two types are judged on both, with the real
   multipliers of the games (×2, ×½, ×0 for each type): against Lotad
   (Grass/Water) Fire is neutral and no longer the right answer. The right

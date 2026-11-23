@@ -420,6 +420,87 @@ static void testPoopAtMostEveryNinetyMinutes() {
   EXPECT_TRUE(made <= 8 * 60 / POOP_MIN_MINUTES);
 }
 
+static uint32_t atHour(uint32_t day, uint32_t hour, uint32_t minute = 0) {
+  return day * 86400UL + hour * 3600UL + minute * 60UL;
+}
+
+// one live minute at a given local time, needs kept healthy
+static void liveMinute(Pet &pet, uint32_t &t, uint32_t epoch) {
+  pet.lastSeenEpoch = epoch;
+  pet.fullness = pet.joy = pet.energy = pet.hygiene = 90;
+  t += PET_TICK_MS;
+  pet.update(t);
+}
+
+static void testBedOnlyBetweenSevenPmAndNineAm() {
+  Pet pet = hatchedPet(4);
+  pet.lastSeenEpoch = atHour(20, 14);
+  EXPECT_EQ(pet.toggleLight(), 0);  // afternoon: not sleepy
+  EXPECT_TRUE(!pet.sleeping);
+  pet.lastSeenEpoch = atHour(20, 21);
+  EXPECT_EQ(pet.toggleLight(), 1);
+  EXPECT_TRUE(pet.sleeping);
+  EXPECT_EQ(pet.toggleLight(), 2);  // waking up is always allowed
+  pet.lastSeenEpoch = atHour(20, 3);
+  EXPECT_EQ(pet.toggleLight(), 1);
+}
+
+static void testNightNeedsEightHoursOfSleep() {
+  Pet pet = hatchedPet(4);
+  pet.careMistakes = 0;
+  uint32_t t = gMockMillis;
+  pet.update(t);
+  // night 1: awake from 19:00 to 9:00 with the board on -> one slip-up at 9:00
+  for (uint32_t m = 0; m < 14 * 60 + 2; m++) liveMinute(pet, t, atHour(30, 19) + m * 60);
+  EXPECT_EQ(pet.careMistakes, 1);
+  EXPECT_TRUE(pet.nightMissedNotice);
+  pet.nightMissedNotice = false;
+  // night 2: plays until 23:00, sleeps until woken up at 9:00 by itself -> fine
+  uint32_t base = atHour(31, 19);
+  for (uint32_t m = 0; m < 14 * 60 + 2; m++) {
+    if (m == 4 * 60) EXPECT_EQ(pet.toggleLight(), 1);
+    liveMinute(pet, t, base + m * 60);
+  }
+  EXPECT_EQ(pet.careMistakes, 1);
+  EXPECT_TRUE(!pet.nightMissedNotice);
+  EXPECT_TRUE(!pet.sleeping);  // woken at 9:00
+  EXPECT_TRUE(pet.wokeAtNine);
+}
+
+static void testFavouriteBerryFillsLongerButNoJoyOrEnergy() {
+  Pet pet = hatchedPet(4);
+  uint8_t fav = 0;
+  while (fav < 3 && !pet.lovesBerry(fav)) fav++;
+  EXPECT_TRUE(fav < 3);
+  pet.lastSeenEpoch = atHour(40, 12);
+  Pet plain = pet;  // same pet, a berry it does not love: the daily care bonus is the same
+  pet.fullness = plain.fullness = 30; pet.joy = plain.joy = 20; pet.energy = plain.energy = 20;
+  pet.feedBerry(fav);
+  plain.feedBerry((fav + 1) % 3);
+  EXPECT_EQ(pet.fullness, 70);
+  EXPECT_EQ(plain.fullness, 55);
+  EXPECT_EQ(pet.joy, plain.joy);        // no extra joy any more
+  EXPECT_EQ(pet.energy, plain.energy);  // no extra energy any more
+  uint32_t t = gMockMillis;
+  pet.update(t);
+  for (int i = 0; i < FAV_BERRY_HOLD; i++) { pet.lastSeenEpoch += 60; t += PET_TICK_MS; pet.update(t); }
+  EXPECT_EQ(pet.fullness, 70);  // one hour without hunger
+  pet.lastSeenEpoch += 60; t += PET_TICK_MS; pet.update(t);
+  EXPECT_TRUE(pet.fullness < 70);
+}
+
+static void testPotionRestoresEnergy() {
+  Pet pet = hatchedPet(4);
+  pet.lastSeenEpoch = atHour(50, 12);
+  pet.energy = 10;
+  EXPECT_TRUE(pet.drinkEnergy());
+  EXPECT_EQ(pet.energy, 40);
+  for (int i = 0; i < 5; i++) EXPECT_TRUE(pet.drinkEnergy());  // no daily limit
+  EXPECT_EQ(pet.energy, 100);
+  pet.sleeping = true;
+  EXPECT_TRUE(!pet.drinkEnergy());
+}
+
 static void testShakeStatusExplainsRefusal() {
   Pet pet = hatchedPet(4);
   pet.setClock(3 * 86400);
@@ -1336,6 +1417,10 @@ int main() {
   testFrameIsAutomaticUnlessChosen();
   testSlipUpOnlyAfterSixLowHours();
   testShakeStatusExplainsRefusal();
+  testBedOnlyBetweenSevenPmAndNineAm();
+  testNightNeedsEightHoursOfSleep();
+  testFavouriteBerryFillsLongerButNoJoyOrEnergy();
+  testPotionRestoresEnergy();
   testPoopAtMostEveryNinetyMinutes();
   testRunawayOnlyAfterTwelveEmptyHours();
   testCaughtDexIsSeparateFromRaisedDex();

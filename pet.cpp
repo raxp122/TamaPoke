@@ -93,6 +93,10 @@ void Pet::newEgg() {
   careMistakes = 0;
   lowMinutes = 0;
   poopMinutes = 0;
+  fullHoldMinutes = 0;
+  nightAwakeMin = 0;
+  nightMissedNotice = false;
+  wokeAtNine = false;
   sleeping = false;
   save();
 }
@@ -181,6 +185,30 @@ void Pet::tick() {
     return;
   }
 
+  // noche (19:00-9:00): a dormir. A las 9 se despierta solo; si en la ventana
+  // paso mas de 6 h despierto con la placa encendida (menos de 8 h de sueno)
+  // cuenta como descuido. Apagada no cuenta (como el resto de descuidos).
+  int h = lastSeenEpoch ? (int)((lastSeenEpoch / 3600UL) % 24UL) : -1;
+  if (h >= 0) {
+    bool inWin = h >= SLEEP_FROM_HOUR || h < SLEEP_UNTIL_HOUR;
+    if (!nightWindowPrev && inWin) nightAwakeMin = 0;  // empieza la noche
+    if (inWin && !sleeping && nightAwakeMin < 0xFFFF) nightAwakeMin++;
+    if (nightWindowPrev && !inWin) {                   // 9:00: termina la noche
+      if (nightAwakeMin > NIGHT_AWAKE_MAX) {
+        careMistakes++;
+        if (bond > 3) bond -= 3;
+        nightMissedNotice = true;
+      }
+      nightAwakeMin = 0;
+    }
+    if (!inWin && sleeping) {  // de dia no se duerme
+      sleeping = false;
+      wokeAtNine = true;
+      pendingSave = true;
+    }
+    nightWindowPrev = inWin;
+  }
+
   // el sueño es descanso: la energia se recupera y las necesidades bajan MUCHO
   // mas lento que despierto y con suelo (amanece pidiendo algo de mimo, no a
   // cero, sin descuidos ni escapadas). despierto: comida -2/min, hig/joy -1/min.
@@ -200,7 +228,8 @@ void Pet::tick() {
 
   if (ageMinutes % MINUTES_PER_LEVEL == 0) sfxPlay(SFX_LEVEL);  // subio de nivel (despierto)
 
-  fullness = clamp100(fullness - nightFoodDrop(lastSeenEpoch));
+  if (fullHoldMinutes) fullHoldMinutes--;  // la baya preferida sacia mas tiempo
+  else fullness = clamp100(fullness - nightFoodDrop(lastSeenEpoch));
   energy = clamp100(energy - 1);
   // caca: como mucho una cada 90 min despierto (antes 15 %/min, una cada ~7 min)
   if (poopMinutes < 0xFFFF) poopMinutes++;
@@ -909,9 +938,10 @@ void Pet::feedBerry(uint8_t color) {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
   if (lovesBerry(color)) {
-    fullness = clamp100(fullness + 35);
-    joy = clamp100(joy + 10);
-    energy = clamp100(energy + 5);     // la preferida da un poco de energia
+    // la preferida sacia mas y durante mas tiempo (1 h sin hambre); la alegria
+    // viene de los juegos y la energia del sueno o de la bebida
+    fullness = clamp100(fullness + 40);
+    fullHoldMinutes = FAV_BERRY_HOLD;
     heartUntil = millis() + HEART_MS;  // "le encanta!"
     berryKnown = true;                 // descubierto: se muestra en la ficha
     addBond(2);
@@ -1575,11 +1605,27 @@ void Pet::play() {
   save();
 }
 
-void Pet::toggleLight() {
-  if (ceremony != CER_NONE) return;
-  if (isEgg()) return;
+bool Pet::canGoToBed() const {
+  int h = lastSeenEpoch ? (int)((lastSeenEpoch / 3600UL) % 24UL) : -1;
+  return h < 0 || h >= SLEEP_FROM_HOUR || h < SLEEP_UNTIL_HOUR;
+}
+
+uint8_t Pet::toggleLight() {
+  if (ceremony != CER_NONE) return 0;
+  if (isEgg()) return 0;
+  if (!sleeping && !canGoToBed()) return 0;  // de dia aun no tiene sueno
   sleeping = !sleeping;
   save();
+  return sleeping ? 1 : 2;
+}
+
+bool Pet::drinkEnergy() {
+  if (ceremony != CER_NONE || isEgg() || sleeping) return false;
+  energy = clamp100(energy + 30);
+  eatUntil = millis() + EAT_ANIM_MS;
+  registerCare();
+  save();
+  return true;
 }
 
 void Pet::clean() {

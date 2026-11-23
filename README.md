@@ -50,6 +50,17 @@ button), the four action buttons along the bottom curve, the battery as a thin
 arc under them and the steps and day streak at the top. While the Pokémon sleeps the screen dims only on
 the main screen.
 
+**Food**: the food button opens a wheel with Razz, Oran and Lum Berry, a Potion
+and, when you have one, a candy. Turn your finger (or tap an item on the ring),
+then tap the centre. A berry gives +25 FOOD; the favourite one +40 and no
+hunger for an hour. A Potion gives +30 ENE (sleep refills energy only at
+night). Joy comes from the minigames.
+
+**Sleep**: the Pokémon goes to bed only between 19:00 and 9:00 (light button);
+you can wake it up or keep it up in the evening. At 9:00 it wakes up by itself.
+If it slept less than 8 hours in that window while the board was on, it counts
+as a slip-up.
+
 **Pokédex**: two buttons cycle the region (all, Kanto, Johto, Hoenn) and the
 filter (all, raised, caught, shiny). In the detail of a Pokémon, **circle your
 finger around the screen** to browse: clockwise goes forward, counter-clockwise

@@ -21,7 +21,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PUNTOS: %u", "Que felicidad!", "+felicidad",
     "AJUSTAR HORA", "HORA", "MIN", "desliza arriba: cancelar", "Idioma",
     "MEDALLA!", "GENIAL!", "RACHA %u DIAS!",
-    "RACHA %u  rec %u", "VIN", "BAYA ???", "BAYA ROJA", "BAYA AZUL", "BAYA VERDE",
+    "RACHA %u  rec %u", "VIN", "BAYA ???", "BAYA FRAMBU", "BAYA ARANJA", "BAYA ZIUELA",
     "%s   EDAD %lud", "toca el nombre: renombrar",
     "COMBATE", "FUE", "DEF", "VEL", "PES", "ENTRENAR FUERZA",
     "MEDALLAS %d/%d", "toca: volver",
@@ -83,6 +83,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Nivel fijado", "Toca: fija el nivel", "Su favorita!", "Descuido perdonado!", "Vinculo +10!", "Caramelo ganado!", "3 metas = caramelo (x%u)", "Marco: auto", "Marco: %u/%u",
     "Gira el dedo, toca el centro",
     "Shh... duerme", "Mareado! Espera", "Basta por hoy",
+    "Sin sueno (19-9)", "Durmio poco!", "Buenos dias!", "POCION", "CARAMELO", "Energia +30!",
   },
   // ---------------- EN ----------------
   {
@@ -97,7 +98,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "SCORE: %u", "So much fun!", "+happiness",
     "SET TIME", "HOUR", "MIN", "swipe up: cancel", "Lang",
     "MEDAL!", "AWESOME!", "%u DAY STREAK!",
-    "STREAK %u  best %u", "BOND", "BERRY ???", "RED BERRY", "BLUE BERRY", "GREEN BERRY",
+    "STREAK %u  best %u", "BOND", "BERRY ???", "RAZZ BERRY", "ORAN BERRY", "LUM BERRY",
     "%s   AGE %lud", "tap name: rename",
     "BATTLE", "ATK", "DEF", "SPD", "WGT", "TRAIN STRENGTH",
     "MEDALS %d/%d", "tap: back",
@@ -159,6 +160,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Level set", "Tap: set level here", "Favourite!", "Slip-up forgiven!", "Bond +10!", "Candy earned!", "3 goals = candy (x%u)", "Frame: auto", "Frame: %u/%u",
     "Turn your finger, tap the centre",
     "Shh... sleeping", "Dizzy! Wait a bit", "Enough for today",
+    "Not sleepy (19-9)", "Slept too little!", "Good morning!", "POTION", "CANDY", "Energy +30!",
   },
   // ---------------- FR ----------------
   {
@@ -173,7 +175,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "SCORE: %u", "Trop bien!", "+bonheur",
     "REGLER L'HEURE", "HEURE", "MIN", "glisse haut: annuler", "Langue",
     "MEDAILLE!", "SUPER!", "SERIE %u JOURS!",
-    "SERIE %u  rec %u", "LIEN", "BAIE ???", "BAIE ROUGE", "BAIE BLEUE", "BAIE VERTE",
+    "SERIE %u  rec %u", "LIEN", "BAIE ???", "BAIE FRAMBY", "BAIE ORAN", "BAIE PRINE",
     "%s   AGE %lud", "touche le nom: renommer",
     "COMBAT", "ATQ", "DEF", "VIT", "PDS", "ENTRAINER FORCE",
     "MEDAILLES %d/%d", "touche: retour",
@@ -235,6 +237,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Niveau regle", "Touche: regle le niveau", "Sa preferee!", "Erreur pardonnee!", "Lien +10!", "Bonbon gagne!", "3 buts = bonbon (x%u)", "Cadre: auto", "Cadre: %u/%u",
     "Tourne le doigt, touche le centre",
     "Chut... il dort", "Etourdi! Attends", "Assez aujourd'hui",
+    "Pas sommeil 19-9", "Trop peu dormi!", "Bonjour!", "POTION", "BONBON", "Energie +30!",
   },
   // ---------------- DE ----------------
   {
@@ -249,7 +252,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PUNKTE: %u", "Wie schoen!", "+Freude",
     "ZEIT STELLEN", "STD", "MIN", "hoch wischen: abbruch", "Sprache",
     "MEDAILLE!", "TOLL!", "%u TAGE SERIE!",
-    "SERIE %u  rek %u", "BND", "BEERE ???", "ROTE BEERE", "BLAUE BEERE", "GRUENE BEERE",
+    "SERIE %u  rek %u", "BND", "BEERE ???", "HIMMIHBEERE", "SINELBEERE", "PRUNUSBEERE",
     "%s   ALTER %lud", "Name tippen: umbenennen",
     "KAMPF", "ANG", "VER", "INI", "GEW", "KRAFT TRAINIEREN",
     "MEDAILLEN %d/%d", "tippen: zurueck",
@@ -311,6 +314,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Waage gesetzt", "Tippen: Waage setzen", "Lieblingsbeere!", "Patzer vergeben!", "Bond +10!", "Bonbon verdient!", "3 Ziele = Bonbon (x%u)", "Rahmen: auto", "Rahmen: %u/%u",
     "Finger drehen, Mitte tippen",
     "Psst... schlaeft", "Schwindlig! Warte", "Genug fuer heute",
+    "Nicht mued (19-9)", "Zu wenig Schlaf!", "Guten Morgen!", "TRANK", "BONBON", "Energie +30!",
   },
   // ---------------- IT ----------------
   {
@@ -325,7 +329,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PUNTI: %u", "Che gioia!", "+felicita",
     "IMPOSTA ORA", "ORA", "MIN", "scorri su: annulla", "Lingua",
     "MEDAGLIA!", "GRANDE!", "SERIE %u GIORNI!",
-    "SERIE %u  rec %u", "LEG", "BACCA ???", "BACCA ROSSA", "BACCA BLU", "BACCA VERDE",
+    "SERIE %u  rec %u", "LEG", "BACCA ???", "BACCALAMPON", "BACCARANCIA", "BACCAPRUGNA",
     "%s   ETA %lud", "tocca il nome: rinomina",
     "LOTTA", "ATT", "DIF", "VEL", "PES", "ALLENA FORZA",
     "MEDAGLIE %d/%d", "tocca: indietro",
@@ -387,6 +391,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Livello impostato", "Tocca: imposta il livello", "La sua preferita!", "Svista perdonata!", "Legame +10!", "Caramella vinta!", "3 obiettivi = caramella (x%u)", "Cornice: auto", "Cornice: %u/%u",
     "Gira il dito, tocca il centro",
     "Shh... dorme", "Stordito! Aspetta", "Basta per oggi",
+    "Non ha sonno 19-9", "Ha dormito poco!", "Buongiorno!", "POZIONE", "CARAMELLA", "Energia +30!",
   },
   // ---------------- PT ----------------
   {
@@ -401,7 +406,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PONTOS: %u", "Que alegria!", "+alegria",
     "AJUSTAR HORA", "HORA", "MIN", "deslize cima: cancelar", "Idioma",
     "MEDALHA!", "OTIMO!", "%u DIAS SEGUIDOS!",
-    "SEQ %u  rec %u", "LACO", "BAGA ???", "BAGA VERMELHA", "BAGA AZUL", "BAGA VERDE",
+    "SEQ %u  rec %u", "LACO", "BAGA ???", "RAZZ BERRY", "ORAN BERRY", "LUM BERRY",
     "%s   IDADE %lud", "toque no nome: renomear",
     "COMBATE", "ATQ", "DEF", "VEL", "PES", "TREINAR FORCA",
     "MEDALHAS %d/%d", "toque: voltar",
@@ -463,6 +468,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Nivel definido", "Toque: define o nivel", "A favorita!", "Descuido perdoado!", "Vinculo +10!", "Doce ganho!", "3 metas = doce (x%u)", "Moldura: auto", "Moldura: %u/%u",
     "Gire o dedo, toque no centro",
     "Shh... dormindo", "Tonto! Espere", "Chega por hoje",
+    "Sem sono (19-9)", "Dormiu pouco!", "Bom dia!", "POCAO", "BALA", "Energia +30!",
   },
 };
 
