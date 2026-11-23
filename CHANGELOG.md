@@ -6,6 +6,11 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Settings wheel**: the settings menu is a ring made for the round screen.
+  The chosen item sits big in the centre with its icon and name, the others
+  around the edge. Turn your finger around the screen (the ring follows it),
+  swipe up/down or tap an item on the ring to bring it to the centre; tap the
+  centre to open it. An available update shows orange on the ring.
 - **Tilt**: the sensor is mounted turned by 90 degrees: tilting up, down,
   left and right now moves the ball that way (1.37.52 still mixed the axes).
 
