@@ -15,6 +15,9 @@ Build numbers are not consecutive: they count every CI run.
   19:00 and 9:00 ("Not sleepy" otherwise); at 9:00 it wakes up by itself
   ("Good morning!"). Less than 8 hours of sleep in that window with the board
   on is a slip-up ("Slept too little!"). A board switched off never counts.
+- Help: the sleep and candy lines describe the new rules.
+
+## 1.37.69 — Type quiz, less poop
 
 - **Type**: Pokémon with two types are judged on both, with the real
   multipliers of the games (×2, ×½, ×0 for each type): against Lotad
