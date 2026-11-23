@@ -458,6 +458,11 @@ void setup() {
   // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
   // handleTouch).
   Wire.setTimeOut(50);
+  // SensorLib lee con Wire.readBytes(): si una lectura I2C falla espera los
+  // bytes que faltan con el timeout de Stream (1 s por defecto) y congelaba el
+  // bucle ~1017 ms ("LOOP MAX ... imu"). Tras requestFrom() los datos ya estan
+  // en el buffer: no hace falta esperar.
+  Wire.setTimeout(10);
 
   // CRITICO: encender la alimentacion del panel (BLDO1=OLED VDD 3.3V) ANTES de
   // inicializar el display. Si el PMU se reseteo (drenaje total), este rail

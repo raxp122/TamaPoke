@@ -203,7 +203,12 @@ void imuPoll(uint32_t nowMs, uint16_t intervalMs) {
   // Der interne Zaehler bleibt als Diagnose sichtbar. Gezaehlt wird bewusst
   // nur die Software-Erkennung, weil der Hardware-Pedometer auf einigen Boards
   // trotz erfolgreicher Aktivierung dauerhaft bei null bleibt.
-  if (pedInited) lastPed = qmi.getPedometerCounter();
+  // (solo diagnostico: se lee cada 5 s, una transaccion I2C menos por vuelta)
+  static uint32_t lastPedRead = 0;
+  if (pedInited && nowMs - lastPedRead >= 5000) {
+    lastPedRead = nowMs;
+    lastPed = qmi.getPedometerCounter();
+  }
 }
 
 bool imuAccel(float *x, float *y, float *z) {

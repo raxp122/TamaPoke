@@ -11,6 +11,9 @@ Build numbers are not consecutive: they count every CI run.
   around the edge. Turn your finger around the screen (the ring follows it),
   swipe up/down or tap an item on the ring to bring it to the centre; tap the
   centre to open it. An available update shows orange on the ring.
+- Fix: a failed read from the motion sensor (or touch) froze the device for
+  about one second ("LOOP MAX ~1017ms imu" in Info): the sensor library waited
+  1 s for bytes that never come; now it waits at most 10 ms.
 
 ## 1.37.55 — Tilt axes
 
