@@ -42,22 +42,28 @@ swipe 380 233 90 233
 shot 28_card_steps
 pwr                  # back to the main screen
 shot 29_back_main
-# --- settings: menu of big buttons (items at y 103, 155, 207, 259, 311, 363)
+# --- settings: wheel. Ring items clockwise from the top, offset k from the chosen one:
+# k1 372,122  k2 407,273  k3 310,393  k4 156,393  k5 59,273  k6 94,122; centre opens
+# order: time, sound, wifi, update, gps, help, info
 swipe 233 100 233 380
 shot 30_settings
-tap 233 96
+tap 233 233
 shot 30a_settings_time
 pwr
-tap 233 143
+tap 372 122
+tap 233 233
 shot 30b_settings_sound
 pwr
-tap 233 378
+tap 59 273
+tap 233 233
 shot 30c_settings_info
 pwr
-tap 233 284
+tap 59 273
+tap 233 233
 shot 30d_settings_gps
 pwr
-tap 233 190
+tap 59 273
+tap 233 233
 shot 31_wifi
 tap 320 112
 shot 32_wifi_scan
@@ -66,14 +72,22 @@ shot 33_wifi_password
 pwr                  # password -> Wi-Fi page
 pwr                  # Wi-Fi page -> settings
 ota available
-tap 233 237
+tap 372 122
+shot 33b_settings_update_hot
+tap 233 233
 shot 34_update
 pwr
-tap 233 331
+tap 407 273
+tap 233 233
 shot 35_help
 tap 380 233
 shot 36_help_2
 pwr                  # help -> settings
+rotshot 37_settings_wheel_turning
+rotate 233 233 170 -150 -60 900
+shot 37b_settings_wheel_after
+swipe 233 120 233 360
+shot 37c_settings_wheel_swipe
 pwr                  # settings -> main
 # --- pokedex
 swipe 90 233 380 233

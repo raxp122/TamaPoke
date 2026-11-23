@@ -4,7 +4,8 @@ tap 233 150
 tap 233 233
 wait 2000
 swipe 233 100 233 380
-tap 233 284
+tap 156 393
+tap 233 233
 wait 3000
 shot 50_gps_searching
 gps fix

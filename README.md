@@ -57,7 +57,9 @@ back, and lifting the finger opens the Pokémon in the centre.
 
 ## Settings
 
-Swipe down for a menu of big buttons:
+Swipe down for the settings wheel: the chosen item is in the centre, the
+others around the edge. Turn your finger around the screen (or swipe up/down,
+or tap an item on the ring) to choose, tap the centre to open:
 
 - **Time**: manual clock, **time zone** and **summer time** (auto, always on,
   always off). With a time zone set, the clock is synced from the internet at

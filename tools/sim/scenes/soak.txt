@@ -55,7 +55,8 @@ tap 150 150
 pwr
 pwr
 swipe 233 100 233 380
-tap 233 143
+tap 372 122
+tap 233 233
 tap 233 128
 tap 233 200
 tap 233 272

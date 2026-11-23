@@ -6,13 +6,25 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Settings wheel**: the settings menu is a ring made for the round screen.
+  The chosen item sits big in the centre with its icon and name, the others
+  around the edge. Turn your finger around the screen (the ring follows it),
+  swipe up/down or tap an item on the ring to bring it to the centre; tap the
+  centre to open it. An available update shows orange on the ring.
+- Fix: a failed read from the motion sensor (or touch) froze the device for
+  about one second ("LOOP MAX ~1017ms imu" in Info): the sensor library waited
+  1 s for bytes that never come; now it waits at most 10 ms.
+
+## 1.37.55 — Tilt axes
+
 - **Tilt**: the sensor is mounted turned by 90 degrees: tilting up, down,
   left and right now moves the ball that way (1.37.52 still mixed the axes).
 
 ## 1.37.52 — Ball, Clean, candy, frame, battery
 
-- **Tilt**: axis signs reversed (not enough, see above); tap the screen to set the current position as flat (useful if
-  the ball keeps rolling: hold the board level and tap).
+- **Tilt**: axis signs reversed (not enough, see above); tap the screen to
+  set the current position as flat (useful if the ball keeps rolling: hold
+  the board level and tap).
 - **Ball**: smooth movement (physics follows real time, 25 frames per
   second). The ball can be hit only below the dashed line; a tap that misses
   it, or comes too early, costs a life; a hit at the last moment (below the

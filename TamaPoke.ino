@@ -132,6 +132,8 @@ ExpeditionSite expeditionSiteChoice = EXP_SITE_COAST;
 bool clockOpen = false;       // ajustes (deslizar abajo): menu y sus paginas
 enum SetPage : uint8_t { SETP_MENU, SETP_TIME, SETP_SOUND, SETP_INFO, SETP_GPS };
 uint8_t setPage = SETP_MENU;
+uint8_t setSel = 0;            // voz elegida en la rueda de ajustes
+bool setRotating = false;      // la rueda gira con el dedo
 int clockH = 12, clockM = 0;  // hora en edicion
 bool powerSave = false;       // ahorro opcional: off por defecto
 bool helpOpen = false;
@@ -456,6 +458,11 @@ void setup() {
   // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
   // handleTouch).
   Wire.setTimeOut(50);
+  // SensorLib lee con Wire.readBytes(): si una lectura I2C falla espera los
+  // bytes que faltan con el timeout de Stream (1 s por defecto) y congelaba el
+  // bucle ~1017 ms ("LOOP MAX ... imu"). Tras requestFrom() los datos ya estan
+  // en el buffer: no hace falta esperar.
+  Wire.setTimeout(10);
 
   // CRITICO: encender la alimentacion del panel (BLDO1=OLED VDD 3.3V) ANTES de
   // inicializar el display. Si el PMU se reseteo (drenaje total), este rail
@@ -557,7 +564,7 @@ uint16_t renderIntervalMs() {
   if (gameOpen && gameMode == 0) return 40;  // BALL: la fisica sigue el tiempo real, la imagen fluida
   if (gameOpen && gameMode == 3) return 60;  // LIMPIA: respuesta rapida al frotar
   if (gameOpen || sackOpen) return 115;
-  if (galleryRotating) return 40;  // carrusel: animacion fluida mientras gira el dedo
+  if (galleryRotating || setRotating) return 40;  // carrusel/rueda: animacion fluida mientras gira el dedo
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
   if (!powerSave) return 100;
   if (dimStage >= 2) return 650;
@@ -1165,6 +1172,7 @@ void handleTouch() {
     tXl = x;
     tYl = y;
     if (!swallowGesture && galleryOpen && galleryDetail) galleryRotateDrag(x, y);
+    if (!swallowGesture && clockOpen && !netOpen && setPage == SETP_MENU) settingsWheelDrag(x, y);
     if (!swallowGesture && gameOpen && gameMode == 3) cleanRub(x, y);
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
     if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && !helpOpen && !gameOpen && millis() - tStart > 3000 &&
@@ -1179,6 +1187,8 @@ void handleTouch() {
     uint32_t dt = millis() - tStart;
     if (galleryRotating) {
       galleryRotateEnd();  // el carrusel consume el gesto
+    } else if (setRotating) {
+      settingsWheelEnd();  // la rueda de ajustes consume el gesto
     } else if (!holdFired && !swallowGesture) {
       switch (classifyGesture(dx, dy, dt)) {
         case G_SWIPE_RIGHT: onSwipe(1); break;
@@ -1226,6 +1236,7 @@ bool goBack() {
     return true;
   }
   if (clockOpen) {
+    setRotating = false;
     if (setPage != SETP_MENU) { setPage = SETP_MENU; clockDirty = true; }
     else { clockOpen = false; markUiDirty(); }
     lockTouchBrief();
@@ -1282,6 +1293,7 @@ void onSwipeV(int dir) {
   if (wildPromptUntil) wildPromptUntil = 0;
   if (gameMenuOpen) return;
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
+  if (clockOpen && !netOpen && setPage == SETP_MENU) { settingsWheelStep(dir > 0 ? -1 : 1); return; }  // rueda: un paso
   if (clockOpen || cardOpen) return;  // se sale con PWR
   if (dir > 0) {                    // deslizar abajo: ajustar hora
     if (!confirmUntil && !feedMenuUntil) openClock();
@@ -4145,14 +4157,160 @@ static const char *settingsItemLabel(uint8_t i, char *buf, size_t len) {
   }
 }
 
-static void renderSettingsMenu() {
-  setTitle(T(S_SETTINGS), 3, 30);
-  char buf[24];
-  for (uint8_t i = 0; i < SET_ITEMS; i++) {
-    bool hot = i == 3 && otaUpdateAvailable();
-    setButton(SET_ITEM_X, SET_ITEM_Y0 + i * SET_ITEM_STEP, SET_ITEM_W, SET_ITEM_H,
-              settingsItemLabel(i, buf, sizeof(buf)), hot ? UI_BAR_WARN : UI_WHITE, UI_INK, 2);
+// ---- rueda de ajustes: la voz elegida en grande en el centro, las demas en el borde ----
+#define SET_WHEEL_R 178     // radio del anillo de voces
+#define SET_WHEEL_ITEM_R 28 // radio de cada voz del anillo
+#define SET_WHEEL_HUB_R 92  // circulo central
+#define SET_WHEEL_STEP ((float)(2 * PI) / SET_ITEMS)
+
+static const uint16_t SET_ITEM_COLOR[SET_ITEMS] = {
+  0x4C98, 0xF3B7, 0x4DDF, 0xFD20, 0x5EAA, 0xB2BF, 0x9CF3 };
+
+// trazo de arco hecho con puntos (sin fillArc, que el simulador no tiene)
+static void arcDots(int cx, int cy, int r, float a0, float a1, int th, uint16_t c) {
+  int n = (int)(fabsf(a1 - a0) * r / 2) + 2;
+  for (int i = 0; i <= n; i++) {
+    float a = a0 + (a1 - a0) * i / n;
+    gfx->fillCircle(cx + (int)lroundf(r * cosf(a)), cy + (int)lroundf(r * sinf(a)), th, c);
   }
+}
+
+// iconos dibujados (s = escala): hora, sonido, wifi, actualizar, gps, ayuda, info
+static void drawSettingsIcon(uint8_t i, int cx, int cy, int s, uint16_t c, uint16_t bg) {
+  switch (i) {
+    case 0:  // reloj
+      gfx->fillCircle(cx, cy, 11 * s, c);
+      gfx->fillCircle(cx, cy, 8 * s, bg);
+      gfx->fillRect(cx - s / 2 - 1, cy - 6 * s, s + 1, 6 * s, c);
+      gfx->fillRect(cx, cy - s / 2 - 1, 5 * s, s + 1, c);
+      break;
+    case 1:  // altavoz
+      gfx->fillRect(cx - 10 * s, cy - 4 * s, 5 * s, 8 * s, c);
+      gfx->fillTriangle(cx - 6 * s, cy - 4 * s, cx + 1 * s, cy - 10 * s, cx + 1 * s, cy + 10 * s, c);
+      gfx->fillTriangle(cx - 6 * s, cy - 4 * s, cx - 6 * s, cy + 4 * s, cx + 1 * s, cy + 10 * s, c);
+      arcDots(cx + 1 * s, cy, 6 * s, -0.8f, 0.8f, s, c);
+      arcDots(cx + 1 * s, cy, 10 * s, -0.8f, 0.8f, s, c);
+      break;
+    case 2:  // wifi
+      gfx->fillCircle(cx, cy + 8 * s, 2 * s, c);
+      arcDots(cx, cy + 8 * s, 7 * s, -2.36f, -0.78f, s, c);
+      arcDots(cx, cy + 8 * s, 13 * s, -2.36f, -0.78f, s, c);
+      arcDots(cx, cy + 8 * s, 19 * s, -2.36f, -0.78f, s, c);
+      break;
+    case 3:  // actualizar: flecha hacia abajo sobre una barra
+      gfx->fillRect(cx - 3 * s, cy - 11 * s, 6 * s, 10 * s, c);
+      gfx->fillTriangle(cx - 9 * s, cy - 2 * s, cx + 9 * s, cy - 2 * s, cx, cy + 7 * s, c);
+      gfx->fillRect(cx - 11 * s, cy + 9 * s, 22 * s, 3 * s, c);
+      break;
+    case 4:  // gps: marcador
+      gfx->fillCircle(cx, cy - 4 * s, 9 * s, c);
+      gfx->fillTriangle(cx - 8 * s, cy - 1 * s, cx + 8 * s, cy - 1 * s, cx, cy + 12 * s, c);
+      gfx->fillCircle(cx, cy - 4 * s, 4 * s, bg);
+      break;
+    default: {  // ayuda "?" / info "i"
+      gfx->fillCircle(cx, cy, 12 * s, c);
+      gfx->setTextColor(bg);
+      gfx->setTextSize(2 * s);
+      gfx->setCursor(cx - 6 * s + 1, cy - 8 * s + 1);
+      gfx->print(i == 5 ? "?" : "i");
+      break;
+    }
+  }
+}
+
+static int settingsWheelPick() {  // la voz que quedara elegida al soltar
+  float frac = galRotAccum / SET_WHEEL_STEP;
+  int k = frac >= 0.5f ? -1 : (frac <= -0.5f ? 1 : 0);  // el anillo sigue al dedo
+  return (setSel + SET_ITEMS + k) % SET_ITEMS;
+}
+
+static void renderSettingsMenu() {
+  float frac = setRotating ? galRotAccum / SET_WHEEL_STEP : 0;
+  int pick = setRotating ? settingsWheelPick() : setSel;
+  // anillo guia
+  arcDots(CX, CY, SET_WHEEL_R, 0, (float)(2 * PI), 0, UI_TRACK);
+  for (int k = -3; k <= 3; k++) {
+    int idx = (setSel + SET_ITEMS + k) % SET_ITEMS;
+    float pos = k + frac;  // 0 = arriba; el anillo gira con el dedo
+    float th = -(float)PI / 2 + pos * SET_WHEEL_STEP;
+    int px = CX + (int)lroundf(SET_WHEEL_R * cosf(th));
+    int py = CY + (int)lroundf(SET_WHEEL_R * sinf(th));
+    bool sel = idx == pick;
+    bool hot = idx == 3 && otaUpdateAvailable();
+    int r = sel ? SET_WHEEL_ITEM_R + 4 : SET_WHEEL_ITEM_R;
+    gfx->fillCircle(px, py, r, sel ? SET_ITEM_COLOR[idx] : UI_WHITE);
+    gfx->drawCircle(px, py, r, hot ? UI_BAR_WARN : UI_INK);
+    if (hot) gfx->drawCircle(px, py, r + 2, UI_BAR_WARN);
+    drawSettingsIcon(idx, px, py, 1, sel ? UI_WHITE : SET_ITEM_COLOR[idx], sel ? SET_ITEM_COLOR[idx] : UI_WHITE);
+  }
+  // centro: la voz elegida, en grande
+  bool hot = pick == 3 && otaUpdateAvailable();
+  gfx->fillCircle(CX, CY, SET_WHEEL_HUB_R, UI_WHITE);
+  gfx->drawCircle(CX, CY, SET_WHEEL_HUB_R, hot ? UI_BAR_WARN : SET_ITEM_COLOR[pick]);
+  gfx->drawCircle(CX, CY, SET_WHEEL_HUB_R - 1, hot ? UI_BAR_WARN : SET_ITEM_COLOR[pick]);
+  drawSettingsIcon(pick, CX, CY - 30, 2, SET_ITEM_COLOR[pick], UI_WHITE);
+  char buf[24];
+  const char *label = settingsItemLabel(pick, buf, sizeof(buf));
+  char l1[24], l2[24];
+  snprintf(l1, sizeof(l1), "%s", label);
+  l2[0] = 0;
+  if (strlen(l1) * 12 > 2 * (SET_WHEEL_HUB_R - 14)) {  // dos lineas, cortando en un espacio
+    char *sp = nullptr;
+    for (char *c = l1; *c; c++)
+      if (*c == ' ' && (!sp || abs((int)(c - l1) - (int)strlen(l1) / 2) < abs((int)(sp - l1) - (int)strlen(l1) / 2))) sp = c;
+    if (sp) { *sp = 0; snprintf(l2, sizeof(l2), "%s", sp + 1); }
+  }
+  gfx->setTextColor(hot ? UI_BAR_WARN : UI_INK);
+  gfx->setTextSize(2);
+  int ly = l2[0] ? CY + 14 : CY + 22;
+  gfx->setCursor(CX - (int)strlen(l1) * 6, ly);
+  gfx->print(l1);
+  if (l2[0]) {
+    gfx->setCursor(CX - (int)strlen(l2) * 6, ly + 20);
+    gfx->print(l2);
+  }
+  const char *hint = T(S_SET_WHEEL_HINT);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(hint) * 3, CY + SET_WHEEL_HUB_R + 18);
+  gfx->print(hint);
+}
+
+void settingsWheelStep(int dir) {
+  setSel = (setSel + SET_ITEMS + dir) % SET_ITEMS;
+  clockDirty = true;
+  sfxPlay(SFX_TAP);
+}
+
+// girar el dedo por la pantalla: sentido horario = siguiente (como el Pokedex)
+void settingsWheelDrag(int16_t x, int16_t y) {
+  float dx = x - CX, dy = y - CY;
+  if (dx * dx + dy * dy < 50.0f * 50.0f) { galRotHasAngle = false; return; }  // cerca del centro el angulo no es fiable
+  float a = atan2f(dy, dx);
+  if (!galRotHasAngle) { galRotLastAngle = a; galRotHasAngle = true; return; }
+  float d = a - galRotLastAngle;
+  if (d > (float)PI) d -= 2 * (float)PI;
+  if (d < -(float)PI) d += 2 * (float)PI;
+  galRotLastAngle = a;
+  galRotAccum += d;
+  if (!setRotating) {
+    if (fabsf(galRotAccum) < GAL_ROT_START) return;
+    setRotating = true;
+    galRotAccum = galRotAccum > 0 ? galRotAccum - GAL_ROT_START : galRotAccum + GAL_ROT_START;
+  }
+  // el anillo sigue al dedo: girar en sentido horario trae la voz siguiente arriba
+  while (galRotAccum >= SET_WHEEL_STEP) { galRotAccum -= SET_WHEEL_STEP; setSel = (setSel + SET_ITEMS - 1) % SET_ITEMS; sfxPlay(SFX_TAP); }
+  while (galRotAccum <= -SET_WHEEL_STEP) { galRotAccum += SET_WHEEL_STEP; setSel = (setSel + 1) % SET_ITEMS; sfxPlay(SFX_TAP); }
+  clockDirty = true;
+}
+
+void settingsWheelEnd() {
+  float frac = galRotAccum / SET_WHEEL_STEP;
+  if (frac >= 0.5f) setSel = (setSel + SET_ITEMS - 1) % SET_ITEMS;
+  else if (frac <= -0.5f) setSel = (setSel + 1) % SET_ITEMS;
+  galRotAccum = 0;
+  setRotating = false;
+  clockDirty = true;
 }
 
 // pagina Ora: hora manual, fuso orario y hora legal (la hora de internet usa los dos)
@@ -4300,9 +4458,20 @@ static void openSettingsPage(uint8_t page) {
 void clockTap(int16_t x, int16_t y) {
   switch (setPage) {
     case SETP_MENU: {
-      if (x < SET_ITEM_X || x >= SET_ITEM_X + SET_ITEM_W || y < SET_ITEM_Y0) return;
-      int i = (y - SET_ITEM_Y0) / SET_ITEM_STEP;
-      if (i >= SET_ITEMS || y > SET_ITEM_Y0 + i * SET_ITEM_STEP + SET_ITEM_H + 3) return;
+      int dx = x - CX, dy = y - CY;
+      int i;
+      if (dx * dx + dy * dy <= (SET_WHEEL_HUB_R + 6) * (SET_WHEEL_HUB_R + 6)) {
+        i = setSel;  // centro: abrir la voz elegida
+      } else {  // una voz del anillo: pasa al centro
+        int best = -1, bestD = (SET_WHEEL_ITEM_R + 14) * (SET_WHEEL_ITEM_R + 14);
+        for (int k = 0; k < SET_ITEMS; k++) {
+          float th = -(float)PI / 2 + k * SET_WHEEL_STEP;
+          int px = CX + (int)lroundf(SET_WHEEL_R * cosf(th)) - x, py = CY + (int)lroundf(SET_WHEEL_R * sinf(th)) - y;
+          if (px * px + py * py < bestD) { bestD = px * px + py * py; best = k; }
+        }
+        if (best > 0) { setSel = (setSel + best) % SET_ITEMS; clockDirty = true; sfxPlay(SFX_TAP); }
+        return;
+      }
       switch (i) {
         case 0: openSettingsPage(SETP_TIME); break;
         case 1: openSettingsPage(SETP_SOUND); break;

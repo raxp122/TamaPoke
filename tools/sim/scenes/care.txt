@@ -18,7 +18,8 @@ swipe 380 233 90 233
 shot 72_daily
 pwr
 swipe 233 100 233 380
-tap 233 143
+tap 372 122
+tap 233 233
 shot 73_sound_frame
 tap 233 344
 shot 74_frame_manual

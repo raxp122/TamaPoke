@@ -9,6 +9,7 @@ class TwoWire {
  public:
   bool begin(int = -1, int = -1, uint32_t = 0) { return true; }
   void setTimeOut(uint16_t) {}
+  void setTimeout(unsigned long) {}
   void setClock(uint32_t) {}
   size_t setBufferSize(size_t n) { return n; }
   void beginTransmission(uint16_t a) { addr = a; tx.clear(); }
