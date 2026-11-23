@@ -79,6 +79,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sin modulo GPS (solo -G)", "Buscando satelites...", "Posicion encontrada", "Necesita antena y cielo abierto",
     "Atento...",
     "Frota las manchas!", "Evita las trampas!",
+    "INCLINA", "INCLINA!", "Inclina la placa",
   },
   // ---------------- EN ----------------
   {
@@ -151,6 +152,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "No GPS module (-G only)", "Searching satellites...", "Position found", "Needs the antenna and open sky",
     "Get ready...",
     "Rub the stains!", "Avoid the traps!",
+    "TILT", "TILT!", "Tilt the board",
   },
   // ---------------- FR ----------------
   {
@@ -223,6 +225,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Pas de GPS (modele -G)", "Recherche satellites...", "Position trouvee", "Antenne et ciel degage requis",
     "Attention...",
     "Frotte les taches!", "Evite les pieges!",
+    "PENCHE", "PENCHE!", "Penche la carte",
   },
   // ---------------- DE ----------------
   {
@@ -295,6 +298,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Kein GPS-Modul (nur -G)", "Suche Satelliten...", "Position gefunden", "Braucht Antenne und freien Himmel",
     "Achtung...",
     "Flecken wegreiben!", "Fallen meiden!",
+    "KIPPEN", "KIPPEN!", "Platine kippen",
   },
   // ---------------- IT ----------------
   {
@@ -367,6 +371,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Nessun GPS (solo -G)", "Ricerca satelliti...", "Posizione trovata", "Serve l'antenna e cielo aperto",
     "Pronti...",
     "Strofina le macchie!", "Evita le trappole!",
+    "INCLINA", "INCLINA!", "Inclina la scheda",
   },
   // ---------------- PT ----------------
   {
@@ -439,6 +444,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sem modulo GPS (so -G)", "Procurando satelites...", "Posicao encontrada", "Precisa de antena e ceu aberto",
     "Atencao...",
     "Esfregue as manchas!", "Evite as armadilhas!",
+    "INCLINA", "INCLINA!", "Incline a placa",
   },
 };
 

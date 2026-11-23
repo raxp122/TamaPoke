@@ -938,6 +938,25 @@ void Pet::playResult(uint8_t score) {
   save();
 }
 
+uint8_t Pet::applyTiltResult(uint8_t score) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = score / 3;
+  if (gain > 12) gain = 12;
+  uint8_t v = trDef + gain;
+  trDef = v > 100 ? 100 : v;
+  joy = clamp100(joy + 4 + (score > 12 ? 20 : score));
+  energy = dropTo(energy, 8 + score / 3, 5);
+  fullness = dropTo(fullness, 4, 5);
+  int burn = (int)weight - score;
+  weight = burn > 0 ? burn : 0;
+  if (score >= 5) heartUntil = millis() + HEART_MS;
+  if (score > tiltHi) tiltHi = score;
+  addBond(1);
+  registerCare();
+  save();
+  return gain;
+}
+
 uint8_t Pet::applyCatchResult(uint8_t score) {
   if (ceremony != CER_NONE || isEgg()) return 0;
   uint8_t gain = score / 3;
@@ -1597,6 +1616,7 @@ void Pet::save() {
   prefs.putUShort("mhi", memoHi);
   prefs.putUShort("clhi", cleanHi);
   prefs.putUShort("tyhi", typeHi);
+  prefs.putUShort("tlhi", tiltHi);
   prefs.putUShort("bwin", battleWins);
   prefs.putUShort("bloss", battleLosses);
   prefs.putUShort("bstk", battleStreak);
@@ -1694,6 +1714,7 @@ void Pet::load() {
   memoHi = prefs.getUShort("mhi", 0);
   cleanHi = prefs.getUShort("clhi", 0);
   typeHi = prefs.getUShort("tyhi", 0);
+  tiltHi = prefs.getUShort("tlhi", 0);
   battleWins = prefs.getUShort("bwin", 0);
   battleLosses = prefs.getUShort("bloss", 0);
   battleStreak = prefs.getUShort("bstk", 0);

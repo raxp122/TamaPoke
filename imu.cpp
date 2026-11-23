@@ -15,6 +15,8 @@ static uint32_t bootIgnoreUntil = 0;
 static uint32_t shakeIgnoreUntil = 0;
 static bool shakePending = false;
 static float lastMag = 0;
+static float lastAx = 0, lastAy = 0, lastAz = 1;
+static bool accelValid = false;
 static float lastGyro = 0;
 static uint32_t lastPed = 0;
 static bool pedInited = false;
@@ -172,6 +174,10 @@ void imuPoll(uint32_t nowMs, uint16_t intervalMs) {
   float x = 0, y = 0, z = 0;
   bool accelRead = qmi.getAccelerometer(x, y, z);
   if (accelRead) {
+    lastAx = x;
+    lastAy = y;
+    lastAz = z;
+    accelValid = true;
     lastMag = sqrtf(x * x + y * y + z * z);
     detectSoftwareStep(nowMs, lastMag);
   }
@@ -198,6 +204,14 @@ void imuPoll(uint32_t nowMs, uint16_t intervalMs) {
   // nur die Software-Erkennung, weil der Hardware-Pedometer auf einigen Boards
   // trotz erfolgreicher Aktivierung dauerhaft bei null bleibt.
   if (pedInited) lastPed = qmi.getPedometerCounter();
+}
+
+bool imuAccel(float *x, float *y, float *z) {
+  if (!accelValid) return false;
+  *x = lastAx;
+  *y = lastAy;
+  *z = lastAz;
+  return true;
 }
 
 bool imuShakeEdge() {

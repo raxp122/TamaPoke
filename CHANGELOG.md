@@ -6,6 +6,13 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- New minigame **TILT**: tilt the board to roll a Poké Ball, collect berries
+  and avoid the holes that appear after 3, 6 and 9 points (3 lives, 30 s).
+  The way you hold the board at the start counts as flat. Trains defence and
+  has its own record (new key, the save is otherwise unchanged).
+
+## 1.37.42 — Minigames
+
 - **Ball**: a tap sends the ball to a random height inside the screen (never
   above the start), walls absorb energy instead of adding it, gravity and side
   speed grow and the tap area shrinks (50 → 34 px) with the score: games end.

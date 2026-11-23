@@ -189,6 +189,19 @@ uint8_t gameGain = 0;
 uint32_t catchUntil = 0, catchTargetUntil = 0;
 int16_t catchX = 0, catchY = 0;
 uint8_t catchIcon = 0;
+// INCLINA: una Pokeball rueda segun la inclinacion de la placa (acelerometro)
+#define TILT_GAME_MS 30000
+#define TILT_FIELD_R 182      // radio del campo (centro de la pantalla)
+#define TILT_BALL_R 16
+#define TILT_HOLES 3
+#define TILT_SIGN_X 1.0f       // si en la placa la bola va al reves, cambiar el signo
+#define TILT_SIGN_Y 1.0f
+float tiltBX = 233, tiltBY = 233, tiltVX = 0, tiltVY = 0;
+float tiltNX = 0, tiltNY = 0;  // "plano" = como se sujetaba la placa al empezar
+int16_t tiltBerryX = 233, tiltBerryY = 160;
+int16_t tiltHoleX[TILT_HOLES], tiltHoleY[TILT_HOLES];
+uint8_t tiltHoleCount = 0;
+uint32_t tiltUntil = 0, tiltSafeUntil = 0;
 #define CATCH_TRAP 3
 uint8_t memoSeq[14] = { 0 };
 uint8_t memoLen = 0, memoShow = 0, memoInput = 0, memoRounds = 0;
@@ -538,6 +551,7 @@ void maybePlayAmbientSound(uint32_t now) {
 uint16_t renderIntervalMs() {
   if (screenOff) return 5000;
   if (battleOpen) return battleResolved ? 320 : 190;
+  if (gameOpen && gameMode == 5) return 50;  // INCLINA: movimiento fluido
   if (gameOpen || sackOpen) return 115;
   if (galleryRotating) return 40;  // carrusel: animacion fluida mientras gira el dedo
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
@@ -1317,16 +1331,18 @@ struct GameMenuTile {
   uint8_t game;
 };
 
-static const GameMenuTile GAME_MENU_TILES[5] = {
+#define GAME_MENU_COUNT 6
+static const GameMenuTile GAME_MENU_TILES[GAME_MENU_COUNT] = {
   { 88, 156, 138, 58, 0 },
   { 240, 156, 138, 58, 1 },
   { 88, 226, 138, 58, 2 },
   { 240, 226, 138, 58, 3 },
-  { 94, 296, 278, 62, 4 },
+  { 88, 296, 138, 58, 4 },
+  { 240, 296, 138, 58, 5 },
 };
 
 int8_t gameMenuHit(int16_t x, int16_t y) {
-  for (uint8_t i = 0; i < 5; i++) {
+  for (uint8_t i = 0; i < GAME_MENU_COUNT; i++) {
     const GameMenuTile &t = GAME_MENU_TILES[i];
     if (x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h) return i;
   }
@@ -1340,6 +1356,7 @@ void startGameMenuChoice(uint8_t idx) {
     case 2: startMemoGame(); break;
     case 3: startCleanGame(); break;
     case 4: startTypeGame(); break;
+    case 5: startTiltGame(); break;
   }
 }
 
@@ -1986,9 +2003,9 @@ void drawGameMenu() {
   const char *title = T(S_PLAY);
   gfx->setCursor(CX - strlen(title) * 9, 124);
   gfx->print(title);
-  const char *labels[5] = { T(S_GAME_BALL), T(S_GAME_CATCH), T(S_GAME_MEMO), T(S_GAME_CLEAN), T(S_GAME_TYPE) };
-  uint16_t cols[5] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98, UI_BAR_OK, 0xF3B7 };
-  for (int i = 0; i < 5; i++) {
+  const char *labels[GAME_MENU_COUNT] = { T(S_GAME_BALL), T(S_GAME_CATCH), T(S_GAME_MEMO), T(S_GAME_CLEAN), T(S_GAME_TYPE), T(S_GAME_TILT) };
+  uint16_t cols[GAME_MENU_COUNT] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98, UI_BAR_OK, 0xF3B7, 0x7A3F };
+  for (int i = 0; i < GAME_MENU_COUNT; i++) {
     const GameMenuTile &t = GAME_MENU_TILES[i];
     gfx->fillRoundRect(t.x, t.y, t.w, t.h, 14, cols[i]);
     gfx->drawRoundRect(t.x, t.y, t.w, t.h, 14, UI_INK);
@@ -2211,6 +2228,7 @@ void gameTap(int16_t x, int16_t y) {
     typeTap(x, y);
     return;
   }
+  if (gameMode == 5) return;  // INCLINA se juega solo inclinando
   if (gameOverUntil) return;
   float dx = ballX - x, dy = ballY - y;
   int hitRadius = ballHitRadius();
@@ -2869,6 +2887,162 @@ void renderTypeGame() {
   flushStampedFrame();
 }
 
+// ---------- INCLINA (acelerometro) ----------
+static bool tiltFarFrom(int16_t x, int16_t y, float bx, float by, int dist) {
+  float dx = x - bx, dy = y - by;
+  return dx * dx + dy * dy >= (float)dist * dist;
+}
+
+// punto al azar dentro del campo, lejos de la bola, de la baya y de los agujeros
+static void tiltRandomSpot(int16_t *ox, int16_t *oy) {
+  for (int tries = 0; tries < 40; tries++) {
+    float a = random(360) * (float)PI / 180.0f, r = 30 + random(TILT_FIELD_R - 60);
+    int16_t x = (int16_t)(CX + r * cosf(a)), y = (int16_t)(CY + 20 + r * 0.85f * sinf(a));
+    if (!tiltFarFrom(x, y, tiltBX, tiltBY, 80)) continue;
+    if (!tiltFarFrom(x, y, tiltBerryX, tiltBerryY, 60)) continue;
+    bool ok = true;
+    for (uint8_t i = 0; i < tiltHoleCount; i++) if (!tiltFarFrom(x, y, tiltHoleX[i], tiltHoleY[i], 60)) ok = false;
+    if (!ok) continue;
+    *ox = x;
+    *oy = y;
+    return;
+  }
+  *ox = CX;
+  *oy = CY + 60;
+}
+
+void startTiltGame() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  gameMenuOpen = false;
+  gameOpen = true;
+  gameMode = 5;
+  gameOverUntil = 0;
+  gameScore = 0;
+  gameMisses = 0;
+  gameNewHi = false;
+  gameGain = 0;
+  float x, y, z;
+  if (imuAccel(&x, &y, &z)) { tiltNX = x; tiltNY = y; }
+  tiltBX = CX; tiltBY = CY + 20; tiltVX = tiltVY = 0;
+  tiltHoleCount = 0;
+  tiltBerryX = CX; tiltBerryY = CY - 60;
+  tiltUntil = millis() + TILT_GAME_MS;
+  tiltSafeUntil = millis() + 1000;
+  sfxPlay(SFX_GAME_START);
+}
+
+void finishTiltGame() {
+  gameNewHi = (gameScore > pet.tiltHi);
+  gameGain = pet.applyTiltResult(gameScore);
+  sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+  gameOverUntil = millis() + 4000;
+}
+
+static void stepTiltGame(uint32_t now) {
+  float x, y, z;
+  if (imuAccel(&x, &y, &z)) {
+    // 0,25 g de inclinacion ~ 1 px por frame^2
+    tiltVX += (x - tiltNX) * TILT_SIGN_X * 4.0f;
+    tiltVY += (y - tiltNY) * TILT_SIGN_Y * 4.0f;
+  }
+  tiltVX *= 0.95f;
+  tiltVY *= 0.95f;
+  float vmax = 13.0f;
+  if (tiltVX > vmax) tiltVX = vmax;
+  if (tiltVX < -vmax) tiltVX = -vmax;
+  if (tiltVY > vmax) tiltVY = vmax;
+  if (tiltVY < -vmax) tiltVY = -vmax;
+  tiltBX += tiltVX;
+  tiltBY += tiltVY;
+  float dx = tiltBX - CX, dy = tiltBY - CY;
+  float d = sqrtf(dx * dx + dy * dy);
+  float lim = TILT_FIELD_R - TILT_BALL_R;
+  if (d > lim) {  // rebote suave en el borde
+    float nx = dx / d, ny = dy / d;
+    float dot = tiltVX * nx + tiltVY * ny;
+    if (dot > 0) { tiltVX -= 1.5f * dot * nx; tiltVY -= 1.5f * dot * ny; }
+    tiltBX = CX + nx * lim;
+    tiltBY = CY + ny * lim;
+  }
+  // baya
+  if (!tiltFarFrom(tiltBerryX, tiltBerryY, tiltBX, tiltBY, 30)) {
+    gameScore++;
+    hitX = tiltBerryX;
+    hitY = tiltBerryY;
+    hitTime = now;
+    sfxPlay(SFX_MINIGAME_OK);
+    tiltRandomSpot(&tiltBerryX, &tiltBerryY);
+    if ((gameScore == 3 || gameScore == 6 || gameScore == 9) && tiltHoleCount < TILT_HOLES) {
+      tiltRandomSpot(&tiltHoleX[tiltHoleCount], &tiltHoleY[tiltHoleCount]);
+      tiltHoleCount++;
+    }
+  }
+  // agujeros
+  if (deadlineReached(now, tiltSafeUntil)) {
+    for (uint8_t i = 0; i < tiltHoleCount; i++) {
+      if (tiltFarFrom(tiltHoleX[i], tiltHoleY[i], tiltBX, tiltBY, 18)) continue;
+      if (++gameMisses >= 3) { finishTiltGame(); return; }
+      sfxPlay(SFX_MINIGAME_BAD);
+      tiltBX = CX; tiltBY = CY + 20; tiltVX = tiltVY = 0;
+      tiltSafeUntil = now + 1200;
+      break;
+    }
+  }
+}
+
+void renderTiltGame() {
+  uint32_t now = millis();
+  if (gameOverUntil) {
+    drawGameResult(T(S_RECORD_FMT), pet.tiltHi, S_DEF_GAIN_FMT);
+    return;
+  }
+  if (deadlineReached(now, tiltUntil)) { finishTiltGame(); return; }
+  stepTiltGame(now);
+  if (gameOverUntil) return;
+  drawGameScene();
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  gfx->drawCircle(CX, CY, TILT_FIELD_R, ink);
+  for (uint8_t i = 0; i < tiltHoleCount; i++) {  // agujeros
+    gfx->fillCircle(tiltHoleX[i], tiltHoleY[i], 22, C565(0x20, 0x18, 0x12));
+    gfx->drawCircle(tiltHoleX[i], tiltHoleY[i], 23, UI_BAR_BAD);
+  }
+  gfx->fillCircle(tiltBerryX, tiltBerryY, 20, UI_WHITE);
+  drawMap(SPR_ICON_BERRY_G, 16, tiltBerryX - 16, tiltBerryY - 16, 2, false);
+  bool blink = !deadlineReached(now, tiltSafeUntil) && (now / 120) % 2;
+  if (!blink) drawMap(SPR_ICON_PLAY, 16, (int)tiltBX - 16, (int)tiltBY - 16, 2, false);
+  gfx->setTextColor(ink);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_TILT_TITLE)) * 9, 32);
+  gfx->print(T(S_TILT_TITLE));
+  char score[16], rec[16];
+  snprintf(score, sizeof(score), T(S_SCORE_FMT), gameScore);
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.tiltHi);
+  gfx->setTextSize(2);
+  gfx->setCursor(74, 78);
+  gfx->print(score);
+  gfx->setCursor(392 - (int)strlen(rec) * 12, 78);
+  gfx->print(rec);
+  for (int i = 0; i < 3; i++) {
+    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
+    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
+  }
+  if (now + TILT_GAME_MS - tiltUntil < 3000) {
+    const char *h = T(S_TILT_HINT);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(h) * 6, 330);
+    gfx->print(h);
+  }
+  int bw = 220;
+  int fw = (int)((uint32_t)bw * (tiltUntil - now) / TILT_GAME_MS);
+  if (fw < 0) fw = 0;
+  gfx->fillRoundRect(CX - bw / 2, 396, bw, 12, 5, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 396, fw, 12, 5, UI_BAR_OK);
+  uint32_t ht = now - hitTime;
+  if (hitTime && ht < 220) gfx->drawCircle((int)hitX, (int)hitY, 26 + ht / 8, UI_BAR_OK);
+  flushStampedFrame();
+}
+
 void renderGame() {
   // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
   // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
@@ -2890,6 +3064,10 @@ void renderGame() {
   }
   if (gameMode == 4) {
     renderTypeGame();
+    return;
+  }
+  if (gameMode == 5) {
+    renderTiltGame();
     return;
   }
 
