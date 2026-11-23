@@ -154,6 +154,9 @@ public:
   uint16_t battleWins = 0, battleLosses = 0;
   uint16_t battleStreak = 0, bestBattleStreak = 0;
   uint8_t collectionFrame = 0;  // 0=Basis, weitere Rahmen ueber Dex-Meilensteine
+  bool frameAuto = true;        // cornice: l'ultima sbloccata (scelta manuale dalle impostazioni)
+  uint8_t candies = 0;          // caramelle: premio per tutte e 3 le missioni del giorno
+  uint32_t candyRewardUntil = 0;  // banner "caramella!" sulla schermata principale
   uint32_t lastPetInteractMinute = 0;
   uint16_t dexRewardMask = 0;
   uint32_t dailyGoalDay = 0;
@@ -191,6 +194,11 @@ public:
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
   }
   void playResult(uint8_t score);  // recompensa del minijuego (entrena VEL)
+  // caramella: toglie uno slip-up se ce ne sono, altrimenti +10 legame.
+  // 0 = non usata, 1 = slip-up perdonato, 2 = legame
+  uint8_t useCandy();
+  uint8_t displayFrame() const { return frameAuto ? (uint8_t)(unlockedCollectionFrameCount() - 1) : collectionFrame; }
+  void setFrameAuto(bool on);
   uint8_t applyCatchResult(uint8_t score);
   uint8_t applyMemoResult(uint8_t rounds);
   uint8_t applyCleanResult(uint8_t score);

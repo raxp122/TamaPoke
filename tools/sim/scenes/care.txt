@@ -1,0 +1,24 @@
+# feed menu (with candies), daily card, profile, settings frame button
+tap 233 150
+tap 233 233
+wait 1000
+tap 233 230
+wait 300
+tap 233 230
+wait 300
+tap 233 230
+wait 6000
+tap 130 352
+shot 70_feed_menu
+pwr
+swipe 233 380 233 120
+shot 71_profile
+swipe 380 233 90 233
+swipe 380 233 90 233
+shot 72_daily
+pwr
+swipe 233 100 233 380
+tap 233 143
+shot 73_sound_frame
+tap 233 344
+shot 74_frame_manual
