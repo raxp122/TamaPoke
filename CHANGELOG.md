@@ -10,6 +10,9 @@ Build numbers are not consecutive: they count every CI run.
   6 hours in a row while the Pokémon is awake (it was every 30 minutes):
   checking it in the morning, at lunch and in the evening is enough, a whole
   day without care is not. Sleep and the device switched off still never count.
+- **Running away**: the Pokémon is ready to leave only after all four needs
+  have been empty for 12 hours while awake (it was 1 hour); it still never
+  leaves on its own.
 - **Shake** always answers: besides the happy reaction, a message and a tick
   say when it is sleeping, needs a pause (25 s) or has had enough for today.
 

@@ -16,7 +16,7 @@
 #define CEREMONY_MS 10000UL                // duracion de la despedida en pantalla
 #define FAREWELL_AGE_MIN (3UL * 24 * 60)   // se despide a los 3 dias de juego (en forma final)
 #define MISTAKE_LOW_MINUTES 360           // descuido: 6 h seguidas con una necesidad a <= 10
-#define RUNAWAY_TICKS 60                   // se escapa tras 1 h con TODO a cero
+#define RUNAWAY_TICKS 720                  // lista para escaparse tras 12 h despierta con TODO a cero
 
 // ceremonias de fin de ciclo
 enum : uint8_t { CER_NONE = 0, CER_FAREWELL, CER_RUNAWAY, CER_RELEASE };
@@ -374,7 +374,7 @@ private:
   uint32_t evoDeclinedAge = 0;  // auf Lv.100: wieder anbieten ab diesem Alter
   uint32_t farDeclinedAge = 0;  // "quedaros juntos": no ofrecer despedida hasta esta edad
   bool starterPick = false;     // primera partida: esperando que el jugador elija inicial
-  uint8_t neglectTicks = 0;
+  uint16_t neglectTicks = 0;
   uint16_t goodTicks = 0;  // racha bien cuidado: forja la DEF
   uint32_t ceremonyUntil = 0;
   uint8_t bondToday = 0;       // tope diario de subida de vinculo

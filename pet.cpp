@@ -238,7 +238,7 @@ void Pet::tick() {
 
   checkMedals();  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
 
-  // abandono total: con TODO a cero durante una hora queda lista para escaparse;
+  // abandono total: con TODO a cero durante 12 h (despierta) queda lista para escaparse;
   // NO se va sola, la dispara el usuario con el boton (final triste, lo presencia)
   if (fullness == 0 && joy == 0 && energy == 0 && hygiene == 0) {
     if (neglectTicks < RUNAWAY_TICKS) neglectTicks++;
@@ -665,7 +665,7 @@ bool Pet::canFarewellNow() const {
          !hasEvolutionPath(speciesId) && ageMinutes >= FAREWELL_AGE_MIN;
 }
 
-// abandono total durante 1h: lista para escaparse. La dispara el usuario con el
+// abandono total durante 12 h: lista para escaparse. La dispara el usuario con el
 // boton (final triste); cuidarla un solo tick la salva (neglectTicks se resetea)
 bool Pet::canRunawayNow() const {
   return !isEgg() && !sleeping && ceremony == CER_NONE && neglectTicks >= RUNAWAY_TICKS;

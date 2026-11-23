@@ -387,6 +387,22 @@ static void testSlipUpOnlyAfterSixLowHours() {
   EXPECT_EQ(pet.careMistakes, 1);
 }
 
+static void testRunawayOnlyAfterTwelveEmptyHours() {
+  Pet pet = hatchedPet(4);
+  uint32_t t = gMockMillis;
+  pet.update(t);
+  for (int i = 0; i < 6 * 60; i++) {  // a long day at work: still there
+    pet.fullness = pet.joy = pet.energy = pet.hygiene = 0;
+    t += PET_TICK_MS; pet.update(t);
+  }
+  EXPECT_TRUE(!pet.canRunawayNow());
+  for (int i = 0; i < 6 * 60; i++) {
+    pet.fullness = pet.joy = pet.energy = pet.hygiene = 0;
+    t += PET_TICK_MS; pet.update(t);
+  }
+  EXPECT_TRUE(pet.canRunawayNow());
+}
+
 static void testShakeStatusExplainsRefusal() {
   Pet pet = hatchedPet(4);
   pet.setClock(3 * 86400);
@@ -1303,6 +1319,7 @@ int main() {
   testFrameIsAutomaticUnlessChosen();
   testSlipUpOnlyAfterSixLowHours();
   testShakeStatusExplainsRefusal();
+  testRunawayOnlyAfterTwelveEmptyHours();
   testCaughtDexIsSeparateFromRaisedDex();
   testCaughtPokemonAdvanceDailyCatchGoal();
   testDexRewardsApplyOnceAndCap();
