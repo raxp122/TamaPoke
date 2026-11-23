@@ -13,11 +13,11 @@ shot 66_game_menu
 tap 309 325
 wait 800
 shot 67_tilt_start
-tilt 0.0 0.25
+tilt -0.25 0.0
 wait 1200
 tilt 0 0
 wait 800
 shot 68_tilt_berry
-tilt -0.3 -0.2
+tilt 0.2 -0.3
 wait 2500
 shot 69_tilt_later
