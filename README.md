@@ -43,12 +43,13 @@ installs it from **Settings › UPDATE**. See [Wi-Fi and updates](#wi-fi-and-upd
 | **Short PWR press** | **back**: closes the open screen; on the main screen it locks the display (PWR again wakes it) |
 | Long PWR press | power off |
 | Hold the Pokémon 3 s | release dialog |
+| Shake the board | a little joy (8 times a day, one every 25 s); otherwise it says why not (asleep, wait, enough for today) |
 
 The main screen shows the four needs as arcs along the edge (**FOOD** and
 **ENE** on the left, **JOY** and **HYG** on the right, each with the icon of its
 button), the four action buttons along the bottom curve, the battery as a thin
-arc under them and the steps and day streak at the top. While the Pokémon sleeps the screen dims only on
-the main screen.
+arc under them and the steps and day streak at the top. While the Pokémon
+sleeps the screen dims only on the main screen.
 
 **Food**: the food button opens a wheel with Razz, Oran and Lum Berry, a Potion
 and, when you have one, a candy. Turn your finger (or tap an item on the ring),
@@ -74,9 +75,7 @@ or tap an item on the ring) to choose, tap the centre to open:
 
 - **Time**: manual clock, **time zone** and **summer time** (auto, always on,
   always off). With a time zone set, the clock is synced from the internet at
-  start-up and every hour. Time and Sound & screen are dial pages: one setting
-  at a time, turn your finger around the edge (or tap − / +) to change it,
-  swipe up/down for the next one; PWR goes back and applies a manual clock.
+  start-up and every hour.
 - **Sound & screen**: sound level, power saving, language (6 languages) and the
   profile frame (automatic or chosen).
 - **Wi-Fi**: saved networks and automatic update check.
@@ -84,6 +83,11 @@ or tap an item on the ring) to choose, tap the centre to open:
 - **GPS** (`-G` board only): status, coordinates, altitude, satellites and UTC
   time of the GNSS module (needs its ceramic antenna and open sky).
 - **Help** and **Info** (firmware, save, microSD, last save time, slowest loop).
+
+Time and Sound & screen are **dial pages**: one setting at a time, its name at
+the top and the value in the centre. Turn your finger around the edge (or tap
+the round − / +) to change it, swipe up/down or tap the name for the next
+setting. PWR goes back and applies a manual clock.
 
 ## Wi-Fi and updates
 
@@ -118,15 +122,18 @@ An update must never force a reinstall over USB:
 - evolution with branching, day/night, bond and stat conditions; it needs the
   species' level and at least three of the four needs above 40
 - wild battles, catching, training, daily goals (all three in a day give a
-  candy that forgives a slip-up) and six minigames: Ball (hit it low, at the right moment), Catch
-  (avoid the traps), Memo, Clean (rub the stains), Type (type chart quiz) and
-  Tilt (roll a Poké Ball by tilting the board; tap to set the level position)
+  candy that forgives a slip-up) and six minigames: Ball (hit it low, at the
+  right moment), Catch (avoid the traps), Memo, Clean (rub the stains), Type
+  (type chart quiz with both types of the rival) and Tilt (roll a Poké Ball by
+  tilting the board; tap to set the level position)
 - expeditions with an item inventory, Hoenn tour sites and walking goals
 - profile, personality, medals, collector ranks and cosmetic frames
 - step counter with daily rewards (500 / 2,000 / 5,000 steps) and lifetime trail
   ranks; walking also raises JOY and BOND within daily caps
 - slip-ups only after 6 hours in a row with an empty need (each one raises the
-  evolution level by one; a candy removes one)
+  evolution level by one; a candy removes one); the Pokémon is ready to run
+  away only after 12 hours with all needs empty, and never leaves on its own
+- poop about every 2 hours awake
 - RTC-based day/night and offline progression
 - synthetic species chirps and sound effects; no game audio or ROM samples
 - browser save backup/restore in the web installer
@@ -186,6 +193,7 @@ endorsed by Nintendo, Game Freak or The Pokémon Company.
 - Expanded fork: [ShadowEnemyx/TamaPoke](https://github.com/ShadowEnemyx/TamaPoke)
 - This fork: Wi-Fi, OTA updates, internet clock and round-screen interface
 - Animated pixel art: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab), CC BY-NC 4.0
+- Item icons (berries, Potion) and interface icons: original pixel art in this repository
 - 3D Pokéball case/remix: [MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi), CC BY-NC-SA
 - Source code: [MIT](LICENSE)
 

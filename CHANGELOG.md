@@ -6,6 +6,11 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- README: shake, running away, poop, Type quiz and item icons described; dial
+  pages explained once for both settings pages.
+
+## 1.37.78 — Settings dial pages
+
 - **Settings pages with a dial**: Time and Sound & screen no longer use
   rectangular buttons. Each page shows one setting at a time: its name at the
   top (dots show how many there are), the value big in the centre and a ring
