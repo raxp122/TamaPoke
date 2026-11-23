@@ -24,7 +24,7 @@ CXX="${CXX:-g++}"
 FLAGS=(-std=gnu++17 -O1 -g -w -DTAMAPOKE_GEN3_RELEASE -DSIM_HOST
        -Itools/sim/stubs -I"$BUILD" -I. -I"$GFX/src")
 SRCS=(tools/sim/sim_main.cpp tools/sim/sim_hw.cpp pet.cpp battle.cpp i18n.cpp
-      species_chirp.cpp thumb_format.cpp netlogic.cpp sdmon.cpp)
+      species_chirp.cpp thumb_format.cpp netlogic.cpp sdmon.cpp gps.cpp gpslogic.cpp)
 # SIM_SANITIZE=1: AddressSanitizer + UBSan, any memory error stops the run (used by CI)
 if [[ "${SIM_SANITIZE:-0}" == 1 ]]; then
   FLAGS+=(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)

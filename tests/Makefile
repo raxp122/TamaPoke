@@ -7,11 +7,12 @@ NET_TEST_OBJS = build/net_tests.o build/netlogic.o
 
 .PHONY: test web-test clean
 
-test: build/pet_tests build/battle_tests build/net_tests build/gesture_tests web-test
+test: build/pet_tests build/battle_tests build/net_tests build/gesture_tests build/gps_tests web-test
 	./build/pet_tests
 	./build/battle_tests
 	./build/net_tests
 	./build/gesture_tests
+	./build/gps_tests
 
 web-test:
 	node web_serial_tests.mjs
@@ -57,6 +58,9 @@ build/netlogic.o: ../netlogic.cpp ../netlogic.h | build
 
 build/gesture_tests: gesture_tests.cpp ../gesture.h | build
 	$(CXX) $(CXXFLAGS) gesture_tests.cpp -o $@
+
+build/gps_tests: gps_tests.cpp ../gpslogic.cpp ../gpslogic.h | build
+	$(CXX) $(CXXFLAGS) gps_tests.cpp ../gpslogic.cpp -o $@
 
 clean:
 	rm -rf build

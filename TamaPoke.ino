@@ -29,6 +29,7 @@
 #include "imu.h"
 #include "netota.h"
 #include "gesture.h"
+#include "gps.h"
 
 // arcos de las barras de necesidades (ver drawBars): pixeles precalculados
 struct ArcPix { uint16_t x, y; uint8_t t; };
@@ -133,7 +134,7 @@ uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
 bool expeditionTrainChoiceOpen = false;
 ExpeditionSite expeditionSiteChoice = EXP_SITE_COAST;
 bool clockOpen = false;       // ajustes (deslizar abajo): menu y sus paginas
-enum SetPage : uint8_t { SETP_MENU, SETP_TIME, SETP_SOUND, SETP_INFO };
+enum SetPage : uint8_t { SETP_MENU, SETP_TIME, SETP_SOUND, SETP_INFO, SETP_GPS };
 uint8_t setPage = SETP_MENU;
 int clockH = 12, clockM = 0;  // hora en edicion
 bool powerSave = false;       // ahorro opcional: off por defecto
@@ -418,6 +419,7 @@ void setup() {
   Serial.printf("TamaPoke fw v%s\n", FW_VERSION);
   otaBootGuard(FW_VERSION);  // crash loop after an update: back to the previous firmware
   loadLang();  // idioma guardado (ES por defecto)
+  Wire.setBufferSize(2048);  // frases NMEA del GPS (-G): hasta ~2 KB por lectura
   Wire.begin(IIC_SDA, IIC_SCL);
   // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
   // Red de seguridad para PMU/RTC (SensorLib NO respeta este timeout en el
@@ -462,6 +464,7 @@ void setup() {
   rtcBegin();
   batBegin();
   pwrSetup();
+  gpsBegin();  // solo placa -G: comprueba el GNSS y lo deja apagado (reset)
   uint32_t e = rtcEpoch();
   if (e == 0) {
     rtcSetEpoch(1767225600UL);  // RTC virgen: semilla (la hora absoluta da igual,
@@ -593,6 +596,10 @@ void loop() {
   handleTouch();
   handleSerial();
   netService(now);
+  bool gpsPage = clockOpen && setPage == SETP_GPS;
+  gpsPoll(now, gpsPage);  // el GNSS solo funciona con su pagina abierta
+  static uint32_t gpsSeen = 0;
+  if (gpsPage && gpsGen() != gpsSeen) { gpsSeen = gpsGen(); clockDirty = true; }
   ensureMon();
   setPowerCacheInterval(powerSave ? 10000UL : 2000UL);
   pet.ensureDailyGoals();
@@ -3710,10 +3717,10 @@ void helpTap(int16_t x, int16_t y) {
 // ---------- ajustes: menu de paginas con botones grandes ----------
 #define SET_ITEM_X 83
 #define SET_ITEM_W 300
-#define SET_ITEM_H 46
-#define SET_ITEM_Y0 80
-#define SET_ITEM_STEP 52
-#define SET_ITEMS 6
+#define SET_ITEM_H 44
+#define SET_ITEM_Y0 74
+#define SET_ITEM_STEP 47
+#define SET_ITEMS 7
 #define SET_BIG_X 83
 #define SET_BIG_W 300
 #define SET_BIG_H 56
@@ -3743,13 +3750,14 @@ static const char *settingsItemLabel(uint8_t i, char *buf, size_t len) {
     case 1: return T(S_SET_SOUNDSCREEN);
     case 2: return T(S_WIFI);
     case 3: snprintf(buf, len, "%s%s", T(S_UPDATE), otaUpdateAvailable() ? " !" : ""); return buf;
-    case 4: return HELP_WORD[gLang < LANG_COUNT ? gLang : LANG_EN];
+    case 4: return "GPS";
+    case 5: return HELP_WORD[gLang < LANG_COUNT ? gLang : LANG_EN];
     default: return "INFO";
   }
 }
 
 static void renderSettingsMenu() {
-  setTitle(T(S_SETTINGS), 3, 34);
+  setTitle(T(S_SETTINGS), 3, 30);
   char buf[24];
   for (uint8_t i = 0; i < SET_ITEMS; i++) {
     bool hot = i == 3 && otaUpdateAvailable();
@@ -3833,6 +3841,44 @@ static void renderSettingsInfo() {
   }
 }
 
+// pagina GPS (placa -G): estado, coordenadas, satelites y hora UTC del modulo
+static void renderSettingsGps() {
+  setTitle("GPS", 3, 40);
+  const GpsInfo &g = gpsInfo();
+  const char *st;
+  uint16_t col;
+  if (!gpsPresent()) { st = T(S_GPS_NONE); col = UI_BAR_BAD; }
+  else if (g.fix) { st = T(S_GPS_FIX); col = UI_BAR_OK; }
+  else { st = T(S_GPS_SEARCHING); col = UI_BAR_WARN; }
+  gfx->setTextColor(col);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(st) * 6, 84);
+  gfx->print(st);
+  if (!gpsPresent()) return;
+  char l[5][32];
+  int n = 0;
+  if (g.fix) {
+    snprintf(l[n++], sizeof(l[0]), "LAT %.5f %c", g.lat < 0 ? -g.lat : g.lat, g.lat < 0 ? 'S' : 'N');
+    snprintf(l[n++], sizeof(l[0]), "LON %.5f %c", g.lon < 0 ? -g.lon : g.lon, g.lon < 0 ? 'W' : 'E');
+    snprintf(l[n++], sizeof(l[0]), "ALT %.0f m", g.altM);
+  }
+  snprintf(l[n++], sizeof(l[0]), "SAT %u / %u", g.satsUsed, g.satsView);
+  if (g.timeValid) snprintf(l[n++], sizeof(l[0]), "UTC %02u:%02u:%02u", g.hh, g.mm, g.ss);
+  for (int i = 0; i < n; i++) {
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(l[i]) * 6, 124 + i * 34);
+    gfx->print(l[i]);
+  }
+  if (!g.fix) {
+    const char *hint = T(S_GPS_HINT);
+    gfx->setTextColor(NET_DIM_INK);
+    gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(hint) * 3, 330);
+    gfx->print(hint);
+  }
+}
+
 void renderClock() {
   clockDirty = false;
   gfx->fillScreen(UI_BG_DAY);
@@ -3840,6 +3886,7 @@ void renderClock() {
     case SETP_TIME: renderSettingsTime(); break;
     case SETP_SOUND: renderSettingsSound(); break;
     case SETP_INFO: renderSettingsInfo(); break;
+    case SETP_GPS: renderSettingsGps(); break;
     default: renderSettingsMenu(); break;
   }
   flushStampedFrame();
@@ -3868,7 +3915,8 @@ void clockTap(int16_t x, int16_t y) {
         case 1: openSettingsPage(SETP_SOUND); break;
         case 2: openNet(NETP_WIFI); break;
         case 3: openNet(NETP_UPDATE); break;
-        case 4: openHelp(); break;
+        case 4: openSettingsPage(SETP_GPS); break;
+        case 5: openHelp(); break;
         default: openSettingsPage(SETP_INFO); break;
       }
       return;
