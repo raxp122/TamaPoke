@@ -6,6 +6,13 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- Info page: "LOOP MAX" no longer counts the light sleep of power saving (it
+  showed up to ~750 ms that were sleep, not work) and names the slowest part of
+  the loop (touch, render, save, sprite SD, wifi, gps, imu, pet).
+- Main screen arcs are prepared about 15 times faster at start-up.
+
+## 1.37.36 — GPS
+
 - **GPS** (`-G` board): Settings › GPS shows the status, latitude/longitude,
   altitude, satellites and UTC time of the LC76G module, which runs only while
   that page is open (held in reset otherwise; the first fix can take a minute).
