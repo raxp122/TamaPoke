@@ -179,7 +179,10 @@ float ballX, ballY, ballVX, ballVY, gamePetX;
 uint8_t gameScore, gameMisses;
 float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
-uint32_t ballLastHitAt = 0;
+uint32_t ballLastHitAt = 0, ballStepAt = 0;
+uint8_t hitBonus = 0;  // 2 = golpe perfecto (anillo dorado, "+2")
+#define BALL_ZONE_Y 230  // solo se golpea por debajo de esta linea
+#define BALL_PERFECT_Y 300  // por debajo: golpe perfecto, +2
 bool gameNewHi = false;
 uint8_t gameGain = 0;
 uint32_t catchUntil = 0, catchTargetUntil = 0;
@@ -213,6 +216,7 @@ int16_t cleanDirt[4] = { 0 }, cleanDirt0[4] = { 0 };  // cuanto falta frotar (px
 uint32_t cleanBorn[4] = { 0 };
 bool cleanRubHas = false;
 int16_t cleanRubX = 0, cleanRubY = 0;
+uint32_t cleanRubT = 0;
 #define CLEAN_GAME_MS 25000
 uint32_t cleanUntil = 0, cleanSpawnAt = 0;
 uint8_t cleanActive = 0;
@@ -548,6 +552,8 @@ uint16_t renderIntervalMs() {
   if (screenOff) return 5000;
   if (battleOpen) return battleResolved ? 320 : 190;
   if (gameOpen && gameMode == 5) return 50;  // INCLINA: movimiento fluido
+  if (gameOpen && gameMode == 0) return 40;  // BALL: la fisica sigue el tiempo real, la imagen fluida
+  if (gameOpen && gameMode == 3) return 60;  // LIMPIA: respuesta rapida al frotar
   if (gameOpen || sackOpen) return 115;
   if (galleryRotating) return 40;  // carrusel: animacion fluida mientras gira el dedo
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
@@ -2046,6 +2052,8 @@ void startGame() {
   gameGain = 0;
   hitTime = 0;
   ballLastHitAt = 0;
+  ballStepAt = 0;
+  hitBonus = 0;
   gamePetX = 233;
   respawnBall();
   sfxPlay(SFX_GAME_START);
@@ -2217,16 +2225,16 @@ void respawnBall() {
   ballVY = 2.05f;
 }
 
-// zona de toque: se reduce con los puntos (50 -> 34 px)
+// zona de toque: se reduce con los puntos (50 -> 30 px)
 int ballHitRadius() {
-  int r = 50 - (gameScore * 16) / 30;
-  return r < 34 ? 34 : r;
+  int r = 50 - (gameScore * 20) / 25;
+  return r < 30 ? 30 : r;
 }
 
 // gravedad: crece con los puntos, asi la partida acelera de verdad
 float ballGravity() {
-  float g = 1.10f + gameScore * 0.045f;
-  return g > 3.2f ? 3.2f : g;
+  float g = 1.10f + gameScore * 0.07f;
+  return g > 3.4f ? 3.4f : g;
 }
 
 void gameTap(int16_t x, int16_t y) {
@@ -2258,30 +2266,39 @@ void gameTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
   float dx = ballX - x, dy = ballY - y;
   int hitRadius = ballHitRadius();
-  if (dx * dx + dy * dy < hitRadius * hitRadius) {  // toque a la bola!
-    uint32_t now = millis();
-    if (now - ballLastHitAt < 260 || ballVY < -0.25f) return;
-    gameScore++;
-    sfxPlay(SFX_MINIGAME_OK);
-    // el toque la manda a una altura al azar dentro de la pantalla, nunca por
-    // encima de donde empezo: la velocidad sale de la gravedad actual
-    float apex = 96.0f + random(110);
-    float rise = ballY - apex;
-    if (rise < 40.0f) rise = 40.0f;
-    ballVY = -sqrtf(2.0f * ballGravity() * rise);
-    float drift = 0.38f + (gameScore >= 6 ? 0.08f : 0.0f) + (gameScore >= 14 ? 0.10f : 0.0f);
-    float chaos = ((int)random(17) - 8) * 0.26f;
-    ballVX += dx * drift + chaos;
-    if (random(100) < 28) ballVX = -ballVX * (0.72f + random(45) * 0.01f);
-    float vxMax = 6.0f + gameScore * 0.12f;  // mas rapida de lado con los puntos
-    if (vxMax > 11.0f) vxMax = 11.0f;
-    if (ballVX > vxMax) ballVX = vxMax;
-    if (ballVX < -vxMax) ballVX = -vxMax;
-    hitX = ballX;
-    hitY = ballY;
-    hitTime = now;
+  uint32_t now = millis();
+  if (now - ballLastHitAt < 260) return;  // el mismo golpe no cuenta dos veces
+  bool onBall = dx * dx + dy * dy < hitRadius * hitRadius;
+  if (onBall && ballVY < -0.25f) return;  // aun sube tras el golpe: no cuenta, no castiga
+  if (!onBall || ballY < BALL_ZONE_Y) {
+    // tocar a ciegas cuesta una vida: el juego premia el momento justo, no la insistencia
     ballLastHitAt = now;
+    ballMiss();
+    return;
   }
+  bool perfect = ballY >= BALL_PERFECT_Y;
+  gameScore += perfect ? 2 : 1;
+  hitBonus = perfect ? 2 : 1;
+  sfxPlay(perfect ? SFX_MEDAL : SFX_MINIGAME_OK);
+  // el toque la manda a una altura al azar; con los puntos sube menos (menos tiempo
+  // para reaccionar). La velocidad sale de la gravedad actual.
+  int top = 96 + (gameScore > 30 ? 60 : gameScore * 2);
+  float apex = (float)top + random(90);
+  float rise = ballY - apex;
+  if (rise < 60.0f) rise = 60.0f;
+  ballVY = -sqrtf(2.0f * ballGravity() * rise);
+  float drift = 0.38f + (gameScore >= 6 ? 0.08f : 0.0f) + (gameScore >= 14 ? 0.10f : 0.0f);
+  float chaos = ((int)random(17) - 8) * 0.26f;
+  ballVX += dx * drift + chaos;
+  if (random(100) < 28) ballVX = -ballVX * (0.72f + random(45) * 0.01f);
+  float vxMax = 6.0f + gameScore * 0.15f;  // mas rapida de lado con los puntos
+  if (vxMax > 11.0f) vxMax = 11.0f;
+  if (ballVX > vxMax) ballVX = vxMax;
+  if (ballVX < -vxMax) ballVX = -vxMax;
+  hitX = ballX;
+  hitY = ballY;
+  hitTime = now;
+  ballLastHitAt = now;
 }
 
 void finishCatchGame() {
@@ -2377,24 +2394,31 @@ void cleanTap(int16_t, int16_t) {}
 
 void cleanRub(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (!cleanRubHas) { cleanRubHas = true; cleanRubX = x; cleanRubY = y; return; }
+  uint32_t now = millis();
+  if (!cleanRubHas) { cleanRubHas = true; cleanRubX = x; cleanRubY = y; cleanRubT = now; return; }
   int dx = x - cleanRubX, dy = y - cleanRubY;
   int d = (int)sqrtf((float)(dx * dx + dy * dy));
+  uint32_t dt = now - cleanRubT;
+  if (dt > 200) dt = 200;  // tras un frame lento no cuenta de mas
   cleanRubX = x;
   cleanRubY = y;
-  if (d <= 0) return;
+  cleanRubT = now;
+  // frotar rapido adelante y atras entre dos lecturas del tactil casi no suma
+  // recorrido: el dedo apoyado sobre la mancha tambien limpia (120 px/s)
+  int work = d + (int)(dt * 12 / 100);
+  if (work <= 0) return;
   for (uint8_t i = 0; i < 4; i++) {
     if (!cleanAlive[i]) continue;
     int sx = x - cleanX[i], sy = y - cleanY[i];
-    if (sx * sx + sy * sy > 46 * 46) continue;
-    cleanDirt[i] -= d;
+    if (sx * sx + sy * sy > 54 * 54) continue;
+    cleanDirt[i] -= work;
     if (cleanDirt[i] > 0) continue;
     cleanAlive[i] = false;
     if (cleanActive) cleanActive--;
     gameScore++;
     hitX = cleanX[i];
     hitY = cleanY[i];
-    hitTime = millis();
+    hitTime = now;
     sfxPlay(SFX_MINIGAME_OK);
   }
 }
@@ -2424,13 +2448,27 @@ void typeTap(int16_t x, int16_t y) {
   }
 }
 
-void stepGame() {
+// vida perdida (al suelo o toque fallido)
+void ballMiss() {
+  if (++gameMisses >= 3) {
+    gameNewHi = (gameScore > pet.gameHi);
+    pet.playResult(gameScore);  // actualiza el record y da felicidad
+    sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+    gameOverUntil = millis() + 4000;
+  } else {
+    respawnBall();
+    sfxPlay(SFX_BALL_MISS);
+  }
+}
+
+// un paso de fisica; f = tiempo transcurrido en unidades de 115 ms (el ritmo original)
+static bool ballPhysics(float f) {
   float grav = ballGravity();
-  ballVX += sinf((millis() + gameScore * 97) * 0.018f) * 0.11f;
-  if (random(100) < 7) ballVX += ((int)random(7) - 3) * 0.22f;
-  ballVY += grav;
-  ballX += ballVX;
-  ballY += ballVY;
+  ballVX += sinf((millis() + gameScore * 97) * 0.018f) * 0.11f * f;
+  if (random(1000) < (int)(70 * f)) ballVX += ((int)random(7) - 3) * 0.22f;
+  ballVY += grav * f;
+  ballX += ballVX * f;
+  ballY += ballVY * f;
   // rebote en la pared circular
   float dx = ballX - CX, dy = ballY - CY;
   float d = sqrtf(dx * dx + dy * dy);
@@ -2452,15 +2490,21 @@ void stepGame() {
     ballVY = -ballVY * 0.4f;
   }
   if (ballY > 384) {  // al suelo
-    if (++gameMisses >= 3) {
-      gameNewHi = (gameScore > pet.gameHi);
-      pet.playResult(gameScore);  // actualiza el record y da felicidad
-      sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
-      gameOverUntil = millis() + 4000;
-    } else {
-      respawnBall();
-      sfxPlay(SFX_BALL_MISS);
-    }
+    ballMiss();
+    return false;
+  }
+  return true;
+}
+
+void stepGame() {
+  uint32_t now = millis();
+  float f = ballStepAt ? (now - ballStepAt) / 115.0f : 0.35f;
+  ballStepAt = now;
+  if (f > 2.5f) f = 2.5f;  // tras una pausa larga (SD, guardado) no salta de golpe
+  while (f > 0 && !gameOverUntil) {  // pasos cortos: la pared y el suelo no se saltan
+    float st = f > 0.4f ? 0.4f : f;
+    f -= st;
+    if (!ballPhysics(st)) break;
   }
   // el bicho la sigue por abajo
   float chase = (ballX - gamePetX) * 0.12f;
@@ -3178,12 +3222,21 @@ void renderGame() {
       }
   }
 
-  // anillo de impacto que se expande y desvanece (feedback suave del golpe)
+  // zona de golpe: linea discontinua; por debajo de la segunda, golpe perfecto
+  for (int x = 50; x < 416; x += 16) gfx->drawFastHLine(x, BALL_ZONE_Y, 8, ink);
+  for (int x = 80; x < 386; x += 12) gfx->drawFastHLine(x, BALL_PERFECT_Y, 4, UI_BAR_WARN);
+
+  // anillo de impacto que se expande y desvanece (dorado y "+2" si fue perfecto)
   uint32_t ht = millis() - hitTime;
-  if (hitTime && ht < 260) {
+  if (hitTime && ht < 420) {
     int rad = 22 + (int)(ht / 6);
-    gfx->drawCircle((int)hitX, (int)hitY, rad, C565(0xff, 0xe7, 0x9f));
-    gfx->drawCircle((int)hitX, (int)hitY, rad - 2, C565(0xff, 0xd9, 0x8a));
+    bool gold = hitBonus == 2;
+    gfx->drawCircle((int)hitX, (int)hitY, rad, gold ? UI_BAR_WARN : C565(0xff, 0xe7, 0x9f));
+    gfx->drawCircle((int)hitX, (int)hitY, rad - 2, gold ? UI_BAR_WARN : C565(0xff, 0xd9, 0x8a));
+    gfx->setTextSize(2);
+    gfx->setTextColor(gold ? UI_BAR_WARN : ink);
+    gfx->setCursor((int)hitX - 12, (int)hitY - 52 - (int)(ht / 20));
+    gfx->print(gold ? "+2" : "+1");
   }
 
   // la pokeball

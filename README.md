@@ -103,7 +103,7 @@ An update must never force a reinstall over USB:
 - evolution with branching, day/night, bond and stat conditions; it needs the
   species' level and at least three of the four needs above 40
 - wild battles, catching, training, daily goals (all three in a day give a
-  candy that forgives a slip-up) and six minigames: Ball, Catch
+  candy that forgives a slip-up) and six minigames: Ball (hit it low, at the right moment), Catch
   (avoid the traps), Memo, Clean (rub the stains), Type (type chart quiz) and
   Tilt (roll a Poké Ball by tilting the board; tap to set the level position)
 - expeditions with an item inventory, Hoenn tour sites and walking goals

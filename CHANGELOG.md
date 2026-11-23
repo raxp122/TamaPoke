@@ -9,6 +9,13 @@ Build numbers are not consecutive: they count every CI run.
 - **Tilt**: the ball now rolls towards the side you lower (both axes were
   reversed); tap the screen to set the current position as flat (useful if
   the ball keeps rolling: hold the board level and tap).
+- **Ball**: smooth movement (physics follows real time, 25 frames per
+  second). The ball can be hit only below the dashed line; a tap that misses
+  it, or comes too early, costs a life; a hit at the last moment (below the
+  orange line) is worth 2 points. Bounces get lower and the ball falls faster
+  as the score grows.
+- **Clean**: keeping the finger on a stain cleans it too, so fast rubbing
+  without lifting the finger works (it used to stop counting).
 - **Candy**: completing all three daily goals gives a candy (up to 9). It
   appears in the food menu only when you have one: it forgives a slip-up or,
   with none, gives +10 bond. The daily card shows how many you have.
