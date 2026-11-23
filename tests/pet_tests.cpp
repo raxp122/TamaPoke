@@ -489,20 +489,16 @@ static void testFavouriteBerryFillsLongerButNoJoyOrEnergy() {
   EXPECT_TRUE(pet.fullness < 70);
 }
 
-static void testEnergyDrinkThreePerDay() {
+static void testPotionRestoresEnergy() {
   Pet pet = hatchedPet(4);
   pet.lastSeenEpoch = atHour(50, 12);
   pet.energy = 10;
-  EXPECT_EQ(pet.drinksLeftToday(), DRINKS_PER_DAY);
   EXPECT_TRUE(pet.drinkEnergy());
   EXPECT_EQ(pet.energy, 40);
-  EXPECT_TRUE(pet.drinkEnergy());
-  EXPECT_TRUE(pet.drinkEnergy());
+  for (int i = 0; i < 5; i++) EXPECT_TRUE(pet.drinkEnergy());  // no daily limit
+  EXPECT_EQ(pet.energy, 100);
+  pet.sleeping = true;
   EXPECT_TRUE(!pet.drinkEnergy());
-  EXPECT_EQ(pet.drinksLeftToday(), 0);
-  pet.lastSeenEpoch = atHour(51, 12);
-  EXPECT_EQ(pet.drinksLeftToday(), DRINKS_PER_DAY);
-  EXPECT_TRUE(pet.drinkEnergy());
 }
 
 static void testShakeStatusExplainsRefusal() {
@@ -1424,7 +1420,7 @@ int main() {
   testBedOnlyBetweenSevenPmAndNineAm();
   testNightNeedsEightHoursOfSleep();
   testFavouriteBerryFillsLongerButNoJoyOrEnergy();
-  testEnergyDrinkThreePerDay();
+  testPotionRestoresEnergy();
   testPoopAtMostEveryNinetyMinutes();
   testRunawayOnlyAfterTwelveEmptyHours();
   testCaughtDexIsSeparateFromRaisedDex();

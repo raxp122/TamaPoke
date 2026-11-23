@@ -19,7 +19,6 @@
 #define SLEEP_UNTIL_HOUR 9                 // ...hasta las 9:00 (se despierta solo)
 #define NIGHT_AWAKE_MAX 360                // 14 h de ventana - 8 h de sueno: mas despierto = descuido
 #define FAV_BERRY_HOLD 60                  // la preferida: 1 h sin hambre
-#define DRINKS_PER_DAY 3
 #define POOP_MIN_MINUTES 90                // nunca dos cacas en menos de 90 min (media ~2 h)
 #define MISTAKE_LOW_MINUTES 360           // descuido: 6 h seguidas con una necesidad a <= 10
 #define RUNAWAY_TICKS 720                  // lista para escaparse tras 12 h despierta con TODO a cero
@@ -258,8 +257,7 @@ public:
   // Devuelve 0 sin cambio (aun no tiene sueno), 1 se duerme, 2 se despierta.
   uint8_t toggleLight();
   bool canGoToBed() const;
-  bool drinkEnergy();             // bebida energetica: +30 energia, 3 al dia
-  uint8_t drinksLeftToday() const;
+  bool drinkEnergy();             // pocion: +30 energia (de dia; de noche se duerme)
   bool nightMissedNotice = false; // la noche paso sin 8 h de sueno (aviso para la UI)
   bool wokeAtNine = false;        // se desperto solo a las 9:00 (aviso para la UI)
   void clean();
@@ -380,13 +378,11 @@ private:
   int16_t eggTarget = 1;       // dex oculto que saldra del huevo
   bool eggShiny = false;       // sorpresa sorteada al crear el huevo
   uint8_t eggTaps = 0;
-  uint16_t lowMinutes = 0;
+  uint16_t lowMinutes = 0;      // minutos seguidos (despierto) con una necesidad a <= 10
   uint16_t poopMinutes = 0;     // minutos despierto desde la ultima caca
   uint8_t fullHoldMinutes = 0;  // baya preferida: la saciedad no baja durante este tiempo
   uint16_t nightAwakeMin = 0;   // minutos despierto (en vivo) en la ventana de 19:00 a 9:00
   bool nightWindowPrev = false; // el tick anterior estaba dentro de la ventana de noche
-  uint32_t drinkDay = 0;
-  uint8_t drinksToday = 0;      // minutos seguidos (despierto) con una necesidad a <= 10
   uint8_t ticksSinceSave = 0;
   bool pendingSave = false;     // guardado periodico pendiente de volcar
   uint8_t evoDeclinedLv = 0;    // "mantener forma": no ofrecer hasta el siguiente nivel

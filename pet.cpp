@@ -1619,18 +1619,8 @@ uint8_t Pet::toggleLight() {
   return sleeping ? 1 : 2;
 }
 
-uint8_t Pet::drinksLeftToday() const {
-  uint32_t d = today();
-  if (d && d != drinkDay) return DRINKS_PER_DAY;
-  return drinksToday >= DRINKS_PER_DAY ? 0 : DRINKS_PER_DAY - drinksToday;
-}
-
 bool Pet::drinkEnergy() {
   if (ceremony != CER_NONE || isEgg() || sleeping) return false;
-  uint32_t d = today();
-  if (d != drinkDay) { drinkDay = d; drinksToday = 0; }
-  if (drinksToday >= DRINKS_PER_DAY) return false;
-  drinksToday++;
   energy = clamp100(energy + 30);
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();

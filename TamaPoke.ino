@@ -1854,7 +1854,7 @@ void renderStarterSelect() {
   flushStampedFrame();
 }
 
-// ---------- rueda de comida: 3 bayas, bebida energetica y (si hay) caramelo ----------
+// ---------- rueda de comida: Baccalampon, Baccarancia, Baccaprugna, Pozione y (si hay) caramelo ----------
 #define FOOD_RING_R 176
 #define FOOD_ITEM_R 32
 #define FOOD_HUB_R 96
@@ -1870,22 +1870,12 @@ static uint8_t foodItems(uint8_t *kinds) {
   return n;
 }
 
-// lata de bebida energetica dibujada (s = escala)
-static void drawDrinkIcon(int cx, int cy, int s, bool dim) {
-  uint16_t body = dim ? UI_TRACK : C565(0x3a, 0x8f, 0xe8);
-  gfx->fillRoundRect(cx - 7 * s, cy - 11 * s, 14 * s, 23 * s, 3 * s, body);
-  gfx->fillRect(cx - 6 * s, cy - 13 * s, 12 * s, 3 * s, UI_TRACK);
-  uint16_t bolt = dim ? UI_WHITE : C565(0xff, 0xd9, 0x4a);
-  gfx->fillTriangle(cx + 2 * s, cy - 8 * s, cx - 4 * s, cy + 1 * s, cx + 0 * s, cy + 1 * s, bolt);
-  gfx->fillTriangle(cx - 2 * s, cy + 0 * s, cx + 4 * s, cy + 0 * s, cx - 2 * s, cy + 9 * s, bolt);
-}
-
 static void drawFoodIcon(uint8_t kind, int cx, int cy, int s) {
   switch (kind) {
-    case FOOD_RED: drawMap(SPR_ICON_FOOD, 16, cx - 8 * s, cy - 8 * s, s, false); break;
-    case FOOD_BLUE: drawMap(SPR_ICON_BERRY_B, 16, cx - 8 * s, cy - 8 * s, s, false); break;
-    case FOOD_GREEN: drawMap(SPR_ICON_BERRY_G, 16, cx - 8 * s, cy - 8 * s, s, false); break;
-    case FOOD_DRINK: drawDrinkIcon(cx, cy, s > 3 ? 3 : 2, pet.drinksLeftToday() == 0); break;
+    case FOOD_RED: drawMap(SPR_ITEM_RAZZ, 16, cx - 8 * s, cy - 8 * s, s, false); break;
+    case FOOD_BLUE: drawMap(SPR_ITEM_ORAN, 16, cx - 8 * s, cy - 8 * s, s, false); break;
+    case FOOD_GREEN: drawMap(SPR_ITEM_LUM, 16, cx - 8 * s, cy - 8 * s, s, false); break;
+    case FOOD_DRINK: drawMap(SPR_ITEM_POTION, 16, cx - 8 * s, cy - 8 * s, s, false); break;
     default: drawMap(SPR_ICON_CANDY, 16, cx - 8 * s, cy - 8 * s, s, false); break;
   }
 }
@@ -1921,13 +1911,13 @@ void renderFoodWheel() {
     case FOOD_RED: name = T(S_BERRY_RED); break;
     case FOOD_BLUE: name = T(S_BERRY_BLUE); break;
     case FOOD_GREEN: name = T(S_BERRY_GREEN); break;
-    case FOOD_DRINK: name = T(S_ENERGY_DRINK); break;
+    case FOOD_DRINK: name = T(S_POTION); break;
     default: name = T(S_CANDY_NAME); break;
   }
   if (kind <= FOOD_GREEN) {
     if (fav) snprintf(fx, sizeof(fx), "+40 %s 1h", T(S_BAR_FOOD));
     else snprintf(fx, sizeof(fx), "+25 %s", T(S_BAR_FOOD));
-  } else if (kind == FOOD_DRINK) snprintf(fx, sizeof(fx), "+30 %s %u/%u", T(S_BAR_ENE), pet.drinksLeftToday(), DRINKS_PER_DAY);
+  } else if (kind == FOOD_DRINK) snprintf(fx, sizeof(fx), "+30 %s", T(S_BAR_ENE));
   else snprintf(fx, sizeof(fx), "x%u", pet.candies);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
@@ -1995,11 +1985,8 @@ void foodWheelTap(int16_t x, int16_t y) {
     if (pet.drinkEnergy()) {
       sfxPlay(SFX_EAT);
       snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_DRINK_OK));
-    } else {
-      sfxPlay(SFX_TAP);
-      snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_DRINK_NONE));
+      petEventFeedbackUntil = millis() + 1800;
     }
-    petEventFeedbackUntil = millis() + 1800;
   } else {
     bool fav = pet.lovesBerry(kind);
     pet.feedBerry(kind);
