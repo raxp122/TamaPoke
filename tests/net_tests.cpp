@@ -269,6 +269,13 @@ static void testTimeZones() {
   // India has half hours, no DST
   EXPECT_EQ(tzOffsetSeconds(12, 1784116800u), 330 * 60);
   EXPECT_EQ(tzOffsetSeconds(200, 1784116800u), 0);
+  // summer time modes: auto follows the rules, on/off are fixed
+  EXPECT_EQ(tzOffsetSecondsMode(2, 1784116800u, DSTM_AUTO), 7200);
+  EXPECT_EQ(tzOffsetSecondsMode(2, 1768478400u, DSTM_AUTO), 3600);
+  EXPECT_EQ(tzOffsetSecondsMode(2, 1768478400u, DSTM_ON), 7200);
+  EXPECT_EQ(tzOffsetSecondsMode(2, 1784116800u, DSTM_OFF), 3600);
+  EXPECT_EQ(tzOffsetSecondsMode(12, 1784116800u, DSTM_ON), 330 * 60 + 3600);
+  EXPECT_EQ(tzOffsetSecondsMode(TZ_OFF, 1784116800u, DSTM_ON), 0);
 }
 
 int main() {

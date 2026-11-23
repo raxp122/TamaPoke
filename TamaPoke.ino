@@ -3758,35 +3758,47 @@ static void renderSettingsMenu() {
   }
 }
 
+// pagina Ora: hora manual, fuso orario y hora legal (la hora de internet usa los dos)
+#define TIME_TZ_Y 204
+#define TIME_DST_Y 254
+#define TIME_OK_Y 318
 static void renderSettingsTime() {
-  setTitle(T(S_SET_TIME), 2, 40);
+  setTitle(T(S_SET_TIME), 2, 30);
   char t[8];
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(7);
-  gfx->setCursor(CX - 105, 84);
+  gfx->setTextSize(6);
+  gfx->setCursor(CX - 90, 54);
   gfx->print(t);
-  drawClockBtn(104, 166, "-");  // hora -
-  drawClockBtn(170, 166, "+");  // hora +
-  drawClockBtn(252, 166, "-");  // min -
-  drawClockBtn(318, 166, "+");  // min +
-  gfx->setTextSize(2);
+  drawClockBtn(104, 116, "-");  // hora -
+  drawClockBtn(170, 116, "+");  // hora +
+  drawClockBtn(252, 116, "-");  // min -
+  drawClockBtn(318, 116, "+");  // min +
+  gfx->setTextSize(1);
   gfx->setTextColor(NET_DIM_INK);
-  gfx->setCursor(120, 232);
+  gfx->setCursor(121, 184);
   gfx->print(T(S_HOUR));
-  gfx->setCursor(276, 232);
+  gfx->setCursor(275, 184);
   gfx->print(T(S_MIN));
+  uint8_t tz = netTimeZone();
+  char tzl[32];
+  snprintf(tzl, sizeof(tzl), "<  %s  >", tz == TZ_OFF ? T(S_TZ_MANUAL) : TZ_ZONES[tz].label);
+  setButton(66, TIME_TZ_Y, 334, 44, tzl, UI_WHITE, UI_INK, 2);
+  uint8_t dm = netDstMode();
+  const char *dl = dm == DSTM_ON ? T(S_DST_ON) : dm == DSTM_OFF ? T(S_DST_OFF) : T(S_DST_AUTO);
+  setButton(66, TIME_DST_Y, 334, 44, dl, tz == TZ_OFF ? UI_BG_DAY : UI_WHITE, tz == TZ_OFF ? UI_TRACK : UI_INK, 2);
   // con la hora de internet activa, el ajuste manual se corrige en la siguiente sincronizacion
-  if (netTimeZone() != TZ_OFF) {
+  if (tz != TZ_OFF) {
     char sl[48];
     uint32_t ls = netLastTimeSync();
     if (ls) snprintf(sl, sizeof(sl), T(S_TZ_SYNCED_FMT), (unsigned)((ls / 3600) % 24), (unsigned)((ls / 60) % 60));
     else snprintf(sl, sizeof(sl), "%s", T(S_TZ_WAIT));
     gfx->setTextSize(1);
-    gfx->setCursor(CX - (int)strlen(sl) * 3, 262);
+    gfx->setTextColor(NET_DIM_INK);
+    gfx->setCursor(CX - (int)strlen(sl) * 3, 304);
     gfx->print(sl);
   }
-  setButton(133, 290, 200, SET_BIG_H, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
+  setButton(133, TIME_OK_Y, 200, 52, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
 }
 
 static void renderSettingsSound() {
@@ -3862,7 +3874,20 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
     case SETP_TIME:
-      if (y >= 166 && y <= 224) {  // fila de botones +/-
+      if (y >= TIME_TZ_Y && y < TIME_TZ_Y + 44 && x >= 66 && x < 400) {  // fuso: izquierda/derecha
+        uint8_t tz = netTimeZone();
+        netSetTimeZone(x < CX ? (tz + TZ_COUNT - 1) % TZ_COUNT : (tz + 1) % TZ_COUNT);
+        clockDirty = true;
+        sfxPlay(SFX_TAP);
+        return;
+      }
+      if (y >= TIME_DST_Y && y < TIME_DST_Y + 44 && x >= 66 && x < 400 && netTimeZone() != TZ_OFF) {
+        netSetDstMode((netDstMode() + 1) % DSTM_COUNT);
+        clockDirty = true;
+        sfxPlay(SFX_TAP);
+        return;
+      }
+      if (y >= 116 && y <= 174) {  // fila de botones +/-
         if (x >= 104 && x < 162) clockH = (clockH + 23) % 24;
         else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
         else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
@@ -3872,7 +3897,7 @@ void clockTap(int16_t x, int16_t y) {
         sfxPlay(SFX_TAP);
         return;
       }
-      if (x >= 133 && x < 333 && y >= 290 && y < 290 + SET_BIG_H) { applyClock(); sfxPlay(SFX_MENU); }
+      if (x >= 133 && x < 333 && y >= TIME_OK_Y && y < TIME_OK_Y + 52) { applyClock(); sfxPlay(SFX_MENU); }
       return;
     case SETP_SOUND:
       if (x < SET_BIG_X || x >= SET_BIG_X + SET_BIG_W) return;
@@ -3900,11 +3925,10 @@ void clockTap(int16_t x, int16_t y) {
 // las comprobaciones de "pantalla de ajustes abierta" siguen valiendo.
 
 #define NET_DIM 0x8410
-#define NET_ROWS_SAVED 3
-#define NET_ROW0_Y 214
+#define NET_ROWS_SAVED 4
+#define NET_ROW0_Y 164
 #define NET_ROW_STEP 49
 #define NET_ROW_H 44
-#define NET_TZ_Y 142
 #define NET_TOP_Y 90
 #define NET_ROWS_SCAN 5
 #define NET_SCAN_Y0 84
@@ -4024,18 +4048,15 @@ static void renderNetWifi() {
   bool on = netAutoCheck();
   netPill(66, NET_TOP_Y, 160, 44, on ? T(S_NET_AUTO_ON) : T(S_NET_AUTO_OFF), on ? UI_BAR_OK : UI_WHITE, on ? UI_BG_DAY : UI_INK, 2);
   netPill(240, NET_TOP_Y, 160, 44, T(S_NET_SEARCH), netBusy() ? UI_TRACK : UI_WHITE, UI_INK, 2);
-  // fuso orario: toque a la izquierda = anterior, a la derecha = siguiente
+  // estado de la hora de internet (el fuso se elige en Ajustes > Ora)
   uint8_t tz = netTimeZone();
-  char tzl[32];
-  snprintf(tzl, sizeof(tzl), "<  %s  >", tz == TZ_OFF ? T(S_TZ_MANUAL) : TZ_ZONES[tz].label);
-  netPill(66, NET_TZ_Y, 334, 44, tzl, UI_WHITE, UI_INK, 2);
   char syncLine[48];
   uint32_t ls = netLastTimeSync();
-  if (tz == TZ_OFF) snprintf(syncLine, sizeof(syncLine), "%s", T(S_NET_AUTO_HINT));
+  if (tz == TZ_OFF) snprintf(syncLine, sizeof(syncLine), "%s", T(S_TZ_MANUAL));
   else if (ls) snprintf(syncLine, sizeof(syncLine), T(S_TZ_SYNCED_FMT), (unsigned)((ls / 3600) % 24), (unsigned)((ls / 60) % 60));
   else snprintf(syncLine, sizeof(syncLine), "%s", T(S_TZ_WAIT));
-  netText(191, syncLine, NET_DIM, 1);
-  if (tz != TZ_OFF) netText(201, T(S_NET_AUTO_HINT), NET_DIM, 1);
+  netText(140, T(S_NET_AUTO_HINT), NET_DIM, 1);
+  netText(150, syncLine, NET_DIM, 1);
 
   int order[NET_MAX];
   int n = netListOrder(l, order);
@@ -4076,14 +4097,6 @@ static void renderNetWifi() {
 static void netWifiTap(int16_t x, int16_t y) {
   if (inBox(x, y, 66, NET_TOP_Y, 160, 44)) {
     netSetAutoCheck(!netAutoCheck());
-    sfxPlay(SFX_TAP);
-    return;
-  }
-  if (inBox(x, y, 66, NET_TZ_Y, 334, 44)) {
-    uint8_t tz = netTimeZone();
-    tz = x < CX ? (tz + TZ_COUNT - 1) % TZ_COUNT : (tz + 1) % TZ_COUNT;
-    netSetTimeZone(tz);
-    netDirty = true;
     sfxPlay(SFX_TAP);
     return;
   }

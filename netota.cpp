@@ -105,6 +105,7 @@ static uint32_t nextAuto = AUTO_FIRST_MS;
 #define TIME_FIRST_MS 20000UL
 #define TIME_EVERY_MS (60UL * 60UL * 1000UL)
 static uint8_t tzZone = TZ_DEFAULT;
+static uint8_t dstMode = DSTM_AUTO;
 static uint32_t nextTime = TIME_FIRST_MS;
 static volatile bool timePending = false;
 static volatile uint32_t timeLocal = 0;   // local epoch waiting to be written to the RTC
@@ -190,6 +191,8 @@ void netBegin(const char *currentVersion) {
     snprintf(badVersion, sizeof(badVersion), "%s", p.getString("badver", "").c_str());
     tzZone = p.getUChar("tz", TZ_DEFAULT);
     if (tzZone >= TZ_COUNT) tzZone = TZ_DEFAULT;
+    dstMode = p.getUChar("dst", DSTM_AUTO);
+    if (dstMode >= DSTM_COUNT) dstMode = DSTM_AUTO;
     p.end();
   }
   WiFi.persistent(false);  // credentials live in our own list, not in the driver's NVS area
@@ -221,6 +224,20 @@ void netSetTimeZone(uint8_t zone) {
 }
 
 uint32_t netLastTimeSync() { return lastSyncLocal; }
+
+uint8_t netDstMode() { return dstMode; }
+
+void netSetDstMode(uint8_t mode) {
+  if (mode >= DSTM_COUNT) return;
+  dstMode = mode;
+  Preferences p;
+  p.begin(NET_NS, false);
+  p.putUChar("dst", mode);
+  p.end();
+  lastSyncLocal = 0;
+  if (tzZone != TZ_OFF) nextTime = millis() + 2000;  // apply it soon
+  bump();
+}
 
 bool netTakeTime(uint32_t *localEpoch) {
   if (!timePending) return false;
@@ -602,7 +619,7 @@ static bool syncTime() {
     return false;
   }
   uint32_t utc = (uint32_t)now;
-  timeLocal = utc + tzOffsetSeconds(tzZone, utc);
+  timeLocal = utc + tzOffsetSecondsMode(tzZone, utc, dstMode);
   lastSyncLocal = timeLocal;
   timePending = true;
   nextTime = millis() + TIME_EVERY_MS;

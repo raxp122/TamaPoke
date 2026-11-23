@@ -133,3 +133,6 @@ extern const TzZone TZ_ZONES[];
 extern const uint8_t TZ_COUNT;
 // local time = utc + offset; 0 for TZ_OFF or an unknown zone
 int32_t tzOffsetSeconds(uint8_t zone, uint32_t utcEpoch);
+// Summer time: automatic (rules of the zone), always on (+1 h) or always off.
+enum DstMode : uint8_t { DSTM_AUTO, DSTM_ON, DSTM_OFF, DSTM_COUNT };
+int32_t tzOffsetSecondsMode(uint8_t zone, uint32_t utcEpoch, uint8_t dstMode);

@@ -234,6 +234,9 @@ static uint8_t simTz = TZ_DEFAULT;
 uint8_t netTimeZone() { return simTz; }
 void netSetTimeZone(uint8_t z) { simTz = z; simGen++; }
 uint32_t netLastTimeSync() { return 1767265320UL; }
+static uint8_t simDst = DSTM_AUTO;
+uint8_t netDstMode() { return simDst; }
+void netSetDstMode(uint8_t m) { simDst = m; simGen++; }
 bool netTakeTime(uint32_t *) { return false; }
 bool netBusy() { return false; }
 uint32_t netGen() { return simGen; }

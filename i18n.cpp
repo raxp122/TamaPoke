@@ -75,6 +75,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Hora manual", "Hora de internet %02u:%02u", "Hora de internet: esperando",
     "AJUSTES", "SONIDO Y PANTALLA",
     "Gira el dedo para pasar",
+    "Hora verano: auto", "Hora verano: si", "Hora verano: no",
   },
   // ---------------- EN ----------------
   {
@@ -143,6 +144,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Manual clock", "Internet time %02u:%02u", "Internet time: waiting",
     "SETTINGS", "SOUND & SCREEN",
     "Circle your finger to browse",
+    "Summer time: auto", "Summer time: on", "Summer time: off",
   },
   // ---------------- FR ----------------
   {
@@ -211,6 +213,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Heure manuelle", "Heure internet %02u:%02u", "Heure internet: en attente",
     "REGLAGES", "SON ET ECRAN",
     "Tourne le doigt pour defiler",
+    "Heure d'ete: auto", "Heure d'ete: oui", "Heure d'ete: non",
   },
   // ---------------- DE ----------------
   {
@@ -279,6 +282,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Uhr manuell", "Internetzeit %02u:%02u", "Internetzeit: wartet",
     "EINSTELLUNGEN", "TON & ANZEIGE",
     "Finger kreisen: blaettern",
+    "Sommerzeit: auto", "Sommerzeit: an", "Sommerzeit: aus",
   },
   // ---------------- IT ----------------
   {
@@ -347,6 +351,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Ora manuale", "Ora da internet %02u:%02u", "Ora da internet: in attesa",
     "IMPOSTAZIONI", "SUONO E SCHERMO",
     "Gira il dito per scorrere",
+    "Ora legale: auto", "Ora legale: si", "Ora legale: no",
   },
   // ---------------- PT ----------------
   {
@@ -415,6 +420,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Hora manual", "Hora da internet %02u:%02u", "Hora da internet: aguardando",
     "AJUSTES", "SOM E TELA",
     "Gire o dedo para navegar",
+    "Horario verao: auto", "Horario verao: sim", "Horario verao: nao",
   },
 };
 

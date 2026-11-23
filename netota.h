@@ -63,6 +63,8 @@ void netSetAutoCheck(bool on);
 uint8_t netTimeZone();                  // index into TZ_ZONES (TZ_OFF = clock set by hand)
 void netSetTimeZone(uint8_t zone);
 uint32_t netLastTimeSync();             // local epoch of the last sync, 0 = not yet
+uint8_t netDstMode();                   // DstMode: summer time auto / always on / always off
+void netSetDstMode(uint8_t mode);
 bool netTakeTime(uint32_t *localEpoch); // once per sync: the main loop writes it to the RTC
 
 const NetList &netSaved();
