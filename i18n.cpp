@@ -83,6 +83,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Nivel fijado", "Toca: fija el nivel", "Su favorita!", "Descuido perdonado!", "Vinculo +10!", "Caramelo ganado!", "3 metas = caramelo (x%u)", "Marco: auto", "Marco: %u/%u",
     "Gira el dedo, toca el centro",
     "Shh... duerme", "Mareado! Espera", "Basta por hoy",
+    "Sin sueno (19-9)", "Durmio poco!", "Buenos dias!", "BEBIDA ENERGIA", "CARAMELO", "Energia +30!", "Basta por hoy",
   },
   // ---------------- EN ----------------
   {
@@ -159,6 +160,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Level set", "Tap: set level here", "Favourite!", "Slip-up forgiven!", "Bond +10!", "Candy earned!", "3 goals = candy (x%u)", "Frame: auto", "Frame: %u/%u",
     "Turn your finger, tap the centre",
     "Shh... sleeping", "Dizzy! Wait a bit", "Enough for today",
+    "Not sleepy (19-9)", "Slept too little!", "Good morning!", "ENERGY DRINK", "CANDY", "Energy +30!", "No more today",
   },
   // ---------------- FR ----------------
   {
@@ -235,6 +237,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Niveau regle", "Touche: regle le niveau", "Sa preferee!", "Erreur pardonnee!", "Lien +10!", "Bonbon gagne!", "3 buts = bonbon (x%u)", "Cadre: auto", "Cadre: %u/%u",
     "Tourne le doigt, touche le centre",
     "Chut... il dort", "Etourdi! Attends", "Assez aujourd'hui",
+    "Pas sommeil 19-9", "Trop peu dormi!", "Bonjour!", "BOISSON ENERGIE", "BONBON", "Energie +30!", "Plus aujourd'hui",
   },
   // ---------------- DE ----------------
   {
@@ -311,6 +314,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Waage gesetzt", "Tippen: Waage setzen", "Lieblingsbeere!", "Patzer vergeben!", "Bond +10!", "Bonbon verdient!", "3 Ziele = Bonbon (x%u)", "Rahmen: auto", "Rahmen: %u/%u",
     "Finger drehen, Mitte tippen",
     "Psst... schlaeft", "Schwindlig! Warte", "Genug fuer heute",
+    "Nicht mued (19-9)", "Zu wenig Schlaf!", "Guten Morgen!", "ENERGIEDRINK", "BONBON", "Energie +30!", "Heute keiner mehr",
   },
   // ---------------- IT ----------------
   {
@@ -387,6 +391,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Livello impostato", "Tocca: imposta il livello", "La sua preferita!", "Svista perdonata!", "Legame +10!", "Caramella vinta!", "3 obiettivi = caramella (x%u)", "Cornice: auto", "Cornice: %u/%u",
     "Gira il dito, tocca il centro",
     "Shh... dorme", "Stordito! Aspetta", "Basta per oggi",
+    "Non ha sonno 19-9", "Ha dormito poco!", "Buongiorno!", "ENERGY DRINK", "CARAMELLA", "Energia +30!", "Basta per oggi",
   },
   // ---------------- PT ----------------
   {
@@ -463,6 +468,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Nivel definido", "Toque: define o nivel", "A favorita!", "Descuido perdoado!", "Vinculo +10!", "Doce ganho!", "3 metas = doce (x%u)", "Moldura: auto", "Moldura: %u/%u",
     "Gire o dedo, toque no centro",
     "Shh... dormindo", "Tonto! Espere", "Chega por hoje",
+    "Sem sono (19-9)", "Dormiu pouco!", "Bom dia!", "ENERGETICO", "BALA", "Energia +30!", "Chega por hoje",
   },
 };
 

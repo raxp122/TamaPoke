@@ -169,7 +169,10 @@ bool starterDirty = true;
 uint32_t bathUntil = 0;
 bool bathPending = false;
 struct { int16_t x, y; uint8_t r, ph; } bubbles[14];
-uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
+uint32_t feedMenuUntil = 0;   // rueda de comida abierta hasta este millis
+uint8_t foodSel = 0;           // voz elegida en la rueda de comida
+bool foodRotating = false;     // la rueda de comida gira con el dedo
+#define FOOD_MENU_MS 12000
 uint32_t nextAmbientSoundAt = 0;
 
 // minijuego "toques": mantener la pokeball en el aire
@@ -299,6 +302,7 @@ int flashIdxForDex(int16_t dex) {
   return (dex >= 1 && dex <= 9) ? IDX[dex] : -1;
 }
 
+#define NET_DIM_INK 0x8410  // gris para textos secundarios
 #define CX 233  // centro de la pantalla redonda
 #define CY 233
 #define PET_CY 202  // centro vertical del sprite
@@ -564,7 +568,7 @@ uint16_t renderIntervalMs() {
   if (gameOpen && gameMode == 0) return 40;  // BALL: la fisica sigue el tiempo real, la imagen fluida
   if (gameOpen && gameMode == 3) return 60;  // LIMPIA: respuesta rapida al frotar
   if (gameOpen || sackOpen) return 115;
-  if (galleryRotating || setRotating) return 40;  // carrusel/rueda: animacion fluida mientras gira el dedo
+  if (galleryRotating || setRotating || foodRotating) return 40;  // carrusel/rueda: animacion fluida mientras gira el dedo
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
   if (!powerSave) return 100;
   if (dimStage >= 2) return 650;
@@ -642,6 +646,13 @@ void loop() {
     sfxPlay(SFX_MEDAL);
   }
   candiesSeen = pet.candies;
+  if (pet.wokeAtNine || pet.nightMissedNotice) {  // fin de la noche (9:00)
+    snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(pet.nightMissedNotice ? S_NIGHT_SHORT : S_WOKE_UP));
+    petEventFeedbackUntil = now + 3500;
+    sfxPlay(pet.nightMissedNotice ? SFX_MINIGAME_BAD : SFX_HEART);
+    pet.wokeAtNine = pet.nightMissedNotice = false;
+    markUiDirty();
+  }
   PERF_SECTION("touch", handleTouch());
   PERF_SECTION("serial", handleSerial());
   PERF_SECTION("wifi", netService(now));
@@ -1184,6 +1195,7 @@ void handleTouch() {
     tYl = y;
     if (!swallowGesture && galleryOpen && galleryDetail) galleryRotateDrag(x, y);
     if (!swallowGesture && clockOpen && !netOpen && setPage == SETP_MENU) settingsWheelDrag(x, y);
+    if (!swallowGesture && feedMenuUntil && !clockOpen && !cardOpen && !galleryOpen && !gameOpen) foodWheelDrag(x, y);
     if (!swallowGesture && gameOpen && gameMode == 3) cleanRub(x, y);
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
     if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && !helpOpen && !gameOpen && millis() - tStart > 3000 &&
@@ -1200,6 +1212,8 @@ void handleTouch() {
       galleryRotateEnd();  // el carrusel consume el gesto
     } else if (setRotating) {
       settingsWheelEnd();  // la rueda de ajustes consume el gesto
+    } else if (foodRotating) {
+      foodWheelEnd();
     } else if (!holdFired && !swallowGesture) {
       switch (classifyGesture(dx, dy, dt)) {
         case G_SWIPE_RIGHT: onSwipe(1); break;
@@ -1305,6 +1319,7 @@ void onSwipeV(int dir) {
   if (gameMenuOpen) return;
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
   if (clockOpen && !netOpen && setPage == SETP_MENU) { settingsWheelStep(dir > 0 ? -1 : 1); return; }  // rueda: un paso
+  if (feedMenuUntil && !clockOpen && !cardOpen) { foodWheelStep(dir > 0 ? -1 : 1); return; }
   if (clockOpen || cardOpen) return;  // se sale con PWR
   if (dir > 0) {                    // deslizar abajo: ajustar hora
     if (!confirmUntil && !feedMenuUntil) openClock();
@@ -1331,6 +1346,7 @@ void onSwipe(int dir) {
   if (wildPromptUntil) wildPromptUntil = 0;
   if (gameMenuOpen) return;
   if (gameOpen || kbOpen || clockOpen || battleOpen) return;
+  if (feedMenuUntil && !cardOpen && !galleryOpen) { foodWheelStep(dir > 0 ? -1 : 1); return; }
   if (cardOpen) {  // dentro de la ficha: cambiar paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     uint8_t old = cardPage;
@@ -1582,28 +1598,8 @@ void onTap(int16_t x, int16_t y) {
     confirmUntil = 0;
     return;
   }
-  if (feedMenuUntil) {       // selector de comida
-    int n = pet.candies ? 4 : 3, mx = CX - n * 33;
-    if (deadlineActive(millis(), feedMenuUntil) && y >= FEED_MENU_Y && y <= FEED_MENU_Y + 64 && x >= mx && x < mx + n * 66) {
-      int item = (x - mx) / 66;
-      if (item == 3) {
-        uint8_t kind = pet.useCandy();
-        if (kind) {
-          snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(kind == 1 ? S_CANDY_FORGIVE : S_CANDY_BOND));
-          petEventFeedbackUntil = millis() + 2200;
-          sfxPlay(SFX_MEDAL);
-        }
-      } else {
-        bool fav = pet.lovesBerry(item);
-        pet.feedBerry(item);
-        sfxPlay(SFX_EAT);
-        if (fav) {  // la preferida: un aviso propio
-          snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_FAVORITE));
-          petEventFeedbackUntil = millis() + 1800;
-        }
-      }
-    }
-    feedMenuUntil = 0;
+  if (feedMenuUntil) {       // rueda de comida
+    foodWheelTap(x, y);
     return;
   }
   if (pet.isEgg()) {
@@ -1637,7 +1633,10 @@ void onTap(int16_t x, int16_t y) {
       sfxPlay(SFX_TAP);
       if (i == 0) {
         if (!pet.sleeping) {
-          feedMenuUntil = millis() + 6000;
+          feedMenuUntil = millis() + FOOD_MENU_MS;
+          foodSel = 0;
+          foodRotating = false;
+          lockTouchBrief();
           sfxPlay(SFX_MENU);
         }
       } else if (i == 1) {
@@ -1648,7 +1647,10 @@ void onTap(int16_t x, int16_t y) {
           sfxPlay(SFX_MENU);
         }
       } else if (i == 2) {
-        pet.toggleLight();
+        if (!pet.toggleLight() && !pet.isEgg() && !pet.ceremony) {  // de dia: aun no tiene sueno
+          snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_NOT_SLEEPY));
+          petEventFeedbackUntil = millis() + 2200;
+        }
       } else {
         startBath();
       }
@@ -1852,6 +1854,163 @@ void renderStarterSelect() {
   flushStampedFrame();
 }
 
+// ---------- rueda de comida: 3 bayas, bebida energetica y (si hay) caramelo ----------
+#define FOOD_RING_R 176
+#define FOOD_ITEM_R 32
+#define FOOD_HUB_R 96
+enum FoodKind : uint8_t { FOOD_RED, FOOD_BLUE, FOOD_GREEN, FOOD_DRINK, FOOD_CANDY };
+
+static uint8_t foodItems(uint8_t *kinds) {
+  uint8_t n = 0;
+  kinds[n++] = FOOD_RED;
+  kinds[n++] = FOOD_BLUE;
+  kinds[n++] = FOOD_GREEN;
+  kinds[n++] = FOOD_DRINK;
+  if (pet.candies) kinds[n++] = FOOD_CANDY;
+  return n;
+}
+
+// lata de bebida energetica dibujada (s = escala)
+static void drawDrinkIcon(int cx, int cy, int s, bool dim) {
+  uint16_t body = dim ? UI_TRACK : C565(0x3a, 0x8f, 0xe8);
+  gfx->fillRoundRect(cx - 7 * s, cy - 11 * s, 14 * s, 23 * s, 3 * s, body);
+  gfx->fillRect(cx - 6 * s, cy - 13 * s, 12 * s, 3 * s, UI_TRACK);
+  uint16_t bolt = dim ? UI_WHITE : C565(0xff, 0xd9, 0x4a);
+  gfx->fillTriangle(cx + 2 * s, cy - 8 * s, cx - 4 * s, cy + 1 * s, cx + 0 * s, cy + 1 * s, bolt);
+  gfx->fillTriangle(cx - 2 * s, cy + 0 * s, cx + 4 * s, cy + 0 * s, cx - 2 * s, cy + 9 * s, bolt);
+}
+
+static void drawFoodIcon(uint8_t kind, int cx, int cy, int s) {
+  switch (kind) {
+    case FOOD_RED: drawMap(SPR_ICON_FOOD, 16, cx - 8 * s, cy - 8 * s, s, false); break;
+    case FOOD_BLUE: drawMap(SPR_ICON_BERRY_B, 16, cx - 8 * s, cy - 8 * s, s, false); break;
+    case FOOD_GREEN: drawMap(SPR_ICON_BERRY_G, 16, cx - 8 * s, cy - 8 * s, s, false); break;
+    case FOOD_DRINK: drawDrinkIcon(cx, cy, s > 3 ? 3 : 2, pet.drinksLeftToday() == 0); break;
+    default: drawMap(SPR_ICON_CANDY, 16, cx - 8 * s, cy - 8 * s, s, false); break;
+  }
+}
+
+void renderFoodWheel() {
+  gfx->fillScreen(UI_BG_DAY);
+  uint8_t kinds[5];
+  uint8_t n = foodItems(kinds);
+  if (foodSel >= n) foodSel = 0;
+  float frac = foodRotating ? galRotAccum / ((float)(2 * PI) / n) : 0;
+  int pick = foodRotating ? wheelPick(foodSel, n) : foodSel;
+  arcDots(CX, CY, FOOD_RING_R, 0, (float)(2 * PI), 0, UI_TRACK);
+  for (int k = -(int)n / 2; k < (int)n - (int)n / 2; k++) {
+    int idx = (foodSel + n + k) % n;
+    int px, py;
+    wheelSlot(k + frac, n, FOOD_RING_R, &px, &py);
+    bool sel = idx == pick;
+    int r = sel ? FOOD_ITEM_R + 4 : FOOD_ITEM_R;
+    gfx->fillCircle(px, py, r, sel ? C565(0xff, 0xf1, 0xc9) : UI_WHITE);
+    gfx->drawCircle(px, py, r, sel ? UI_BAR_WARN : UI_INK);
+    drawFoodIcon(kinds[idx], px, py, 3);
+  }
+  // centro: el elegido en grande, nombre y efecto
+  uint8_t kind = kinds[pick];
+  gfx->fillCircle(CX, CY, FOOD_HUB_R, UI_WHITE);
+  gfx->drawCircle(CX, CY, FOOD_HUB_R, UI_BAR_WARN);
+  gfx->drawCircle(CX, CY, FOOD_HUB_R - 1, UI_BAR_WARN);
+  drawFoodIcon(kind, CX, CY - 34, 4);
+  const char *name;
+  char fx[24];
+  bool fav = kind <= FOOD_GREEN && pet.berryKnown && pet.lovesBerry(kind);
+  switch (kind) {
+    case FOOD_RED: name = T(S_BERRY_RED); break;
+    case FOOD_BLUE: name = T(S_BERRY_BLUE); break;
+    case FOOD_GREEN: name = T(S_BERRY_GREEN); break;
+    case FOOD_DRINK: name = T(S_ENERGY_DRINK); break;
+    default: name = T(S_CANDY_NAME); break;
+  }
+  if (kind <= FOOD_GREEN) {
+    if (fav) snprintf(fx, sizeof(fx), "+40 %s 1h", T(S_BAR_FOOD));
+    else snprintf(fx, sizeof(fx), "+25 %s", T(S_BAR_FOOD));
+  } else if (kind == FOOD_DRINK) snprintf(fx, sizeof(fx), "+30 %s %u/%u", T(S_BAR_ENE), pet.drinksLeftToday(), DRINKS_PER_DAY);
+  else snprintf(fx, sizeof(fx), "x%u", pet.candies);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(name) * 6, CY + 10);
+  gfx->print(name);
+  gfx->setTextColor(fav ? UI_BAR_BAD : NET_DIM_INK);
+  gfx->setCursor(CX - (int)strlen(fx) * 6, CY + 34);
+  gfx->print(fx);
+  if (fav) {
+    const char *f = T(S_FAVORITE);
+    gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(f) * 3, CY + 58);
+    gfx->print(f);
+  }
+  const char *hint = T(S_SET_WHEEL_HINT);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(hint) * 3, CY + FOOD_HUB_R + 16);
+  gfx->print(hint);
+  flushStampedFrame();
+}
+
+void foodWheelStep(int dir) {
+  uint8_t kinds[5];
+  uint8_t n = foodItems(kinds);
+  foodSel = (foodSel + n + dir) % n;
+  feedMenuUntil = millis() + FOOD_MENU_MS;
+  sfxPlay(SFX_TAP);
+}
+
+void foodWheelDrag(int16_t x, int16_t y) {
+  uint8_t kinds[5];
+  uint8_t n = foodItems(kinds);
+  if (wheelDrag(x, y, foodSel, n, foodRotating)) feedMenuUntil = millis() + FOOD_MENU_MS;
+}
+
+void foodWheelEnd() {
+  uint8_t kinds[5];
+  uint8_t n = foodItems(kinds);
+  wheelEnd(foodSel, n, foodRotating);
+}
+
+void foodWheelTap(int16_t x, int16_t y) {
+  uint8_t kinds[5];
+  uint8_t n = foodItems(kinds);
+  int slot = wheelTapSlot(x, y, n, FOOD_HUB_R, FOOD_RING_R, FOOD_ITEM_R);
+  if (slot == -1) return;
+  if (slot >= 0) {  // una voz del anillo pasa al centro
+    if (slot > 0) { foodSel = (foodSel + slot) % n; sfxPlay(SFX_TAP); }
+    feedMenuUntil = millis() + FOOD_MENU_MS;
+    return;
+  }
+  uint8_t kind = kinds[foodSel % n];
+  feedMenuUntil = 0;
+  markUiDirty();
+  lockTouchBrief();
+  if (kind == FOOD_CANDY) {
+    uint8_t r = pet.useCandy();
+    if (r) {
+      snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(r == 1 ? S_CANDY_FORGIVE : S_CANDY_BOND));
+      petEventFeedbackUntil = millis() + 2200;
+      sfxPlay(SFX_MEDAL);
+    }
+  } else if (kind == FOOD_DRINK) {
+    if (pet.drinkEnergy()) {
+      sfxPlay(SFX_EAT);
+      snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_DRINK_OK));
+    } else {
+      sfxPlay(SFX_TAP);
+      snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_DRINK_NONE));
+    }
+    petEventFeedbackUntil = millis() + 1800;
+  } else {
+    bool fav = pet.lovesBerry(kind);
+    pet.feedBerry(kind);
+    sfxPlay(SFX_EAT);
+    if (fav) {  // la preferida: un aviso propio
+      snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_FAVORITE));
+      petEventFeedbackUntil = millis() + 1800;
+    }
+  }
+}
+
 void render() {
   if (staticScreenClean()) { perfRenderSkipCount++; return; }
   if (pet.awaitingStarter()) {  // primera partida: region y starter (prioridad total)
@@ -1894,6 +2053,10 @@ void render() {
   if (cardOpen) {
     renderCard();
     return;
+  }
+  if (feedMenuUntil) {
+    if (deadlineReached(millis(), feedMenuUntil) || pet.sleeping) { feedMenuUntil = 0; foodRotating = false; }
+    else { renderFoodWheel(); return; }
   }
   int h = sceneHour();
   gNight = isVisualNight(h, pet.sleeping);
@@ -1982,31 +2145,6 @@ void render() {
   if (wildPromptUntil) {
     if (deadlineReached(millis(), wildPromptUntil)) wildPromptUntil = 0;
     else drawWildPrompt();
-  }
-
-  // selector de comida
-  if (feedMenuUntil) {
-    if (deadlineReached(millis(), feedMenuUntil)) {
-      feedMenuUntil = 0;
-    } else {
-      // 3 bayas; la caramela solo aparece si hay alguna (premio de las 3 metas del dia)
-      int n = pet.candies ? 4 : 3, mw = n * 66;
-      int mx = CX - mw / 2;
-      gfx->fillRoundRect(mx, FEED_MENU_Y, mw, 64, 14, UI_WHITE);
-      gfx->drawRoundRect(mx, FEED_MENU_Y, mw, 64, 14, inkColor());
-      drawMap(SPR_ICON_FOOD, 16, mx + 9, FEED_MENU_Y + 8, 3, false);
-      drawMap(SPR_ICON_BERRY_B, 16, mx + 75, FEED_MENU_Y + 8, 3, false);
-      drawMap(SPR_ICON_BERRY_G, 16, mx + 141, FEED_MENU_Y + 8, 3, false);
-      if (pet.candies) {
-        drawMap(SPR_ICON_CANDY, 16, mx + 207, FEED_MENU_Y + 8, 3, false);
-        char cn[6];
-        snprintf(cn, sizeof(cn), "x%u", pet.candies);
-        gfx->setTextColor(UI_INK);
-        gfx->setTextSize(1);
-        gfx->setCursor(mx + 246, FEED_MENU_Y + 50);
-        gfx->print(cn);
-      }
-    }
   }
 
   // dialogo "soltar?" (pulsacion larga sobre el bicho)
@@ -3976,7 +4114,6 @@ void drawClockBtn(int x, int y, const char *l) {
   gfx->print(l);
 }
 
-#define NET_DIM_INK 0x8410
 
 const char *soundModeLabel() {
   switch (audioMode()) {
@@ -4015,8 +4152,8 @@ static const char *const HELP_TITLES[LANG_COUNT][HELP_PAGE_COUNT] = {
 
 static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT] = {
   {
-    { "Comida baja = descuido.", "Jugar sube alegria.", "Bano limpia suciedad.", "Tocar da alegria/vinc.", "Peso alto te frena.", "Dulce alegra, engorda." },
-    { "Dormir recupera energia.", "Durmiendo todo baja lento.", "Luz despierta o duerme.", "PWR: atras; en casa bloq.", "Ahorro usa light sleep.", "Sin borrar conserva save." },
+    { "Comida baja = descuido.", "Jugar sube alegria.", "Bano limpia suciedad.", "Tocar da alegria/vinc.", "Peso alto te frena.", "Caramelo: -1 descuido." },
+    { "Dormir recupera energia.", "Durmiendo todo baja lento.", "Cama solo 19:00-9:00.", "PWR: atras; en casa bloq.", "Ahorro usa light sleep.", "Sin borrar conserva save." },
     { "Bola: toca la bola.", "Atrapa: toca iconos.", "Memo: repite secuencia.", "Limpia: toca manchas.", "Tipo: elige ventaja.", "Dan records y entreno." },
     { "Rapido: menos dano.", "Rival esquiva poco.", "Recibes algo menos dano.", "Fuerte: mas dano.", "Riesgo y contra mayor.", "No siempre conviene." },
     { "Esquivar evita dano.", "Si sale: Contra listo.", "Prox ataque pega mas.", "Ruhe/Descanso cura 2x.", "Tambien da Guardia.", "Tipos suben/bajan dano." },
@@ -4025,8 +4162,8 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Expedicion: 15/30/60 min.", "Cuesta energia al salir.", "El bicho sigue disponible.", "Buen cuidado mejora premio.", "Recoge 1 objeto al volver.", "Chip abre esta tarjeta." },
   },
   {
-    { "Low food = slip-up.", "Play raises joy.", "Bath cleans dirt.", "Petting gives joy/bond.", "High weight slows you.", "Candy cheers but fattens." },
-    { "Sleep restores energy.", "Needs decay slower asleep.", "Light toggles sleep.", "PWR: back; locks at home.", "Power Save light-sleeps.", "No erase keeps saves." },
+    { "Low food = slip-up.", "Play raises joy.", "Bath cleans dirt.", "Petting gives joy/bond.", "High weight slows you.", "Candy: 3 goals, -1 slip." },
+    { "Sleep restores energy.", "Needs decay slower asleep.", "Bed only 19:00-9:00.", "PWR: back; locks at home.", "Power Save light-sleeps.", "No erase keeps saves." },
     { "Ball: tap the ball.", "Catch: tap icons.", "Memo: repeat sequence.", "Clean: tap stains.", "Type: pick advantage.", "Records and training." },
     { "Quick: lower damage.", "Enemy dodges less.", "You take less damage.", "Heavy: more damage.", "More risk/counterplay.", "Not always best." },
     { "Dodge avoids damage.", "Success: Counter ready.", "Next attack hits harder.", "Rest heals only 2x.", "Rest also gives Guard.", "Types change damage." },
@@ -4035,8 +4172,8 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Expedition: 15/30/60 min.", "Energy is spent at start.", "Pet stays available.", "Care and bond improve finds.", "Claim 1 item when back.", "Chip opens this card." },
   },
   {
-    { "Faim basse = erreur.", "Jouer monte la joie.", "Bain nettoie.", "Caresse donne lien/joie.", "Poids haut ralentit.", "Bonbon rend gros." },
-    { "Sommeil rend energie.", "Besoins baissent moins.", "Lumiere dort/reveille.", "PWR: retour; verrou accueil", "Eco utilise light sleep.", "Sans erase garde save." },
+    { "Faim basse = erreur.", "Jouer monte la joie.", "Bain nettoie.", "Caresse donne lien/joie.", "Poids haut ralentit.", "Bonbon: -1 erreur." },
+    { "Sommeil rend energie.", "Besoins baissent moins.", "Dodo seulement 19h-9h.", "PWR: retour; verrou accueil", "Eco utilise light sleep.", "Sans erase garde save." },
     { "Balle: touche la balle.", "Attrape: touche icones.", "Memo: repete sequence.", "Nettoie: touche taches.", "Type: choisis avantage.", "Records et entrainement." },
     { "Rapide: degats bas.", "Ennemi esquive moins.", "Tu subis moins.", "Fort: degats hauts.", "Risque plus grand.", "Pas toujours meilleur." },
     { "Esquive evite degats.", "Succes: Contre pret.", "Prochaine attaque plus.", "Repos soigne 2 fois.", "Repos donne Garde.", "Types changent degats." },
@@ -4045,8 +4182,8 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Expedition: 15/30/60 min.", "Energie payee au depart.", "Le pet reste disponible.", "Soin/lien aide le butin.", "Prends 1 objet au retour.", "Chip ouvre cette carte." },
   },
   {
-    { "Food 0 = Patzer.", "Spielen hebt Freude.", "Bad reinigt Hygiene.", "Streicheln gibt Bond.", "Hohes Gewicht bremst.", "Candy freut, macht dick." },
-    { "Schlaf gibt Energie.", "Needs sinken langsamer.", "Licht: schlafen/wach.", "PWR: zurueck; Start sperrt", "Sparen nutzt Light Sleep.", "Ohne Erase bleibt Save." },
+    { "Food 0 = Patzer.", "Spielen hebt Freude.", "Bad reinigt Hygiene.", "Streicheln gibt Bond.", "Hohes Gewicht bremst.", "Bonbon: -1 Patzer." },
+    { "Schlaf gibt Energie.", "Needs sinken langsamer.", "Bett nur 19-9 Uhr.", "PWR: zurueck; Start sperrt", "Sparen nutzt Light Sleep.", "Ohne Erase bleibt Save." },
     { "Ball: Ball antippen.", "Fangen: Icons treffen.", "Memo: Folge merken.", "Putzen: Flecken tippen.", "Typ: Vorteil waehlen.", "Gibt Rekorde/Training." },
     { "Schnell: weniger Schaden.", "Gegner weicht selten aus.", "Du kassierst weniger.", "Stark: mehr Schaden.", "Mehr Risiko/Gegendruck.", "Nicht immer beste Wahl." },
     { "Ausweichen meidet Schaden.", "Klappt es: Konter bereit.", "Naechster Angriff staerker.", "Ruhen heilt nur 2x.", "Ruhen gibt auch Schutz.", "Typen aendern Schaden." },
@@ -4055,8 +4192,8 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Expedition: 15/30/60 Min.", "Kostet beim Start Energie.", "Pet bleibt verfuegbar.", "Pflege/Bond verbessert Fund.", "Fund danach einsammeln.", "Chip oeffnet diese Karte." },
   },
   {
-    { "Cibo 0 = errore.", "Gioca aumenta gioia.", "Bagno pulisce.", "Carezza da legame.", "Peso alto rallenta.", "Dolce rallegra, ingrassa." },
-    { "Sonno da energia.", "Bisogni calano meno.", "Luce dorme/sveglia.", "PWR: indietro; blocca home", "Risparmio usa light sleep.", "Senza erase salva." },
+    { "Cibo 0 = errore.", "Gioca aumenta gioia.", "Bagno pulisce.", "Carezza da legame.", "Peso alto rallenta.", "Caramella: -1 svista." },
+    { "Sonno da energia.", "Bisogni calano meno.", "Letto solo 19:00-9:00.", "PWR: indietro; blocca home", "Risparmio usa light sleep.", "Senza erase salva." },
     { "Palla: tocca palla.", "Prendi: tocca icone.", "Memo: ripeti sequenza.", "Pulisci: tocca macchie.", "Tipo: scegli vantaggio.", "Record e allenamento." },
     { "Rapido: meno danni.", "Nemico schiva meno.", "Subisci meno danni.", "Forte: piu danni.", "Piu rischio.", "Non sempre migliore." },
     { "Schiva evita danni.", "Successo: contro pronto.", "Prox attacco piu forte.", "Riposo cura solo 2x.", "Riposo da Guardia.", "Tipi cambiano danni." },
@@ -4065,8 +4202,8 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Spedizione: 15/30/60 min.", "Energia spesa alla partenza.", "Il pet resta disponibile.", "Cura/legame migliora premio.", "Ritira 1 oggetto al ritorno.", "Chip apre questa carta." },
   },
   {
-    { "Comida 0 = falha.", "Jogar sobe alegria.", "Banho limpa.", "Carinho da vinculo.", "Peso alto atrasa.", "Doce alegra, engorda." },
-    { "Sono da energia.", "Necessidades caem menos.", "Luz dorme/acorda.", "PWR: voltar; bloqueia home", "Poupanca usa light sleep.", "Sem erase guarda save." },
+    { "Comida 0 = falha.", "Jogar sobe alegria.", "Banho limpa.", "Carinho da vinculo.", "Peso alto atrasa.", "Bala: -1 falha." },
+    { "Sono da energia.", "Necessidades caem menos.", "Cama so 19:00-9:00.", "PWR: voltar; bloqueia home", "Poupanca usa light sleep.", "Sem erase guarda save." },
     { "Bola: toque na bola.", "Pegar: toque icones.", "Memo: repita sequencia.", "Limpa: toque manchas.", "Tipo: escolha vantagem.", "Recordes e treino." },
     { "Rapido: dano menor.", "Rival desvia menos.", "Voce recebe menos.", "Forte: dano maior.", "Mais risco.", "Nem sempre melhor." },
     { "Desviar evita dano.", "Sucesso: contra pronto.", "Prox ataque mais forte.", "Descanso cura so 2x.", "Descanso da Guarda.", "Tipos mudam dano." },
@@ -4237,11 +4374,63 @@ static void drawSettingsIcon(uint8_t i, int cx, int cy, int s, uint16_t c, uint1
   }
 }
 
-static int settingsWheelPick() {  // la voz que quedara elegida al soltar
-  float frac = galRotAccum / SET_WHEEL_STEP;
-  int k = frac >= 0.5f ? -1 : (frac <= -0.5f ? 1 : 0);  // el anillo sigue al dedo
-  return (setSel + SET_ITEMS + k) % SET_ITEMS;
+// ---- rueda generica (ajustes y comida): el anillo sigue al dedo ----
+static int wheelPick(uint8_t sel, uint8_t n) {  // la voz que quedara elegida al soltar
+  float frac = galRotAccum / ((float)(2 * PI) / n);
+  int k = frac >= 0.5f ? -1 : (frac <= -0.5f ? 1 : 0);
+  return (sel + n + k) % n;
 }
+
+static bool wheelDrag(int16_t x, int16_t y, uint8_t &sel, uint8_t n, bool &rotating) {
+  float dx = x - CX, dy = y - CY;
+  if (dx * dx + dy * dy < 50.0f * 50.0f) { galRotHasAngle = false; return false; }  // cerca del centro el angulo no es fiable
+  float a = atan2f(dy, dx);
+  if (!galRotHasAngle) { galRotLastAngle = a; galRotHasAngle = true; return false; }
+  float d = a - galRotLastAngle;
+  if (d > (float)PI) d -= 2 * (float)PI;
+  if (d < -(float)PI) d += 2 * (float)PI;
+  galRotLastAngle = a;
+  galRotAccum += d;
+  if (!rotating) {
+    if (fabsf(galRotAccum) < GAL_ROT_START) return false;
+    rotating = true;
+    galRotAccum = galRotAccum > 0 ? galRotAccum - GAL_ROT_START : galRotAccum + GAL_ROT_START;
+  }
+  float step = (float)(2 * PI) / n;
+  // girar en sentido horario trae arriba la voz anterior (como una rueda de verdad)
+  while (galRotAccum >= step) { galRotAccum -= step; sel = (sel + n - 1) % n; sfxPlay(SFX_TAP); }
+  while (galRotAccum <= -step) { galRotAccum += step; sel = (sel + 1) % n; sfxPlay(SFX_TAP); }
+  return true;
+}
+
+static void wheelEnd(uint8_t &sel, uint8_t n, bool &rotating) {
+  sel = wheelPick(sel, n);
+  galRotAccum = 0;
+  rotating = false;
+}
+
+// posicion en pantalla del elemento k (0 = arriba) de una rueda de n elementos
+static void wheelSlot(float pos, uint8_t n, int r, int *px, int *py) {
+  float th = -(float)PI / 2 + pos * (float)(2 * PI) / n;
+  *px = CX + (int)lroundf(r * cosf(th));
+  *py = CY + (int)lroundf(r * sinf(th));
+}
+
+// toque en una rueda: -1 nada, -2 centro, 0..n-1 desplazamiento k de la voz tocada
+static int wheelTapSlot(int16_t x, int16_t y, uint8_t n, int hubR, int ringR, int itemR) {
+  int dx = x - CX, dy = y - CY;
+  if (dx * dx + dy * dy <= (hubR + 6) * (hubR + 6)) return -2;
+  int best = -1, bestD = (itemR + 14) * (itemR + 14);
+  for (int k = 0; k < n; k++) {
+    int px, py;
+    wheelSlot(k, n, ringR, &px, &py);
+    int ex = px - x, ey = py - y;
+    if (ex * ex + ey * ey < bestD) { bestD = ex * ex + ey * ey; best = k; }
+  }
+  return best;
+}
+
+static int settingsWheelPick() { return wheelPick(setSel, SET_ITEMS); }
 
 static void renderSettingsMenu() {
   float frac = setRotating ? galRotAccum / SET_WHEEL_STEP : 0;
@@ -4303,32 +4492,11 @@ void settingsWheelStep(int dir) {
 
 // girar el dedo por la pantalla: sentido horario = siguiente (como el Pokedex)
 void settingsWheelDrag(int16_t x, int16_t y) {
-  float dx = x - CX, dy = y - CY;
-  if (dx * dx + dy * dy < 50.0f * 50.0f) { galRotHasAngle = false; return; }  // cerca del centro el angulo no es fiable
-  float a = atan2f(dy, dx);
-  if (!galRotHasAngle) { galRotLastAngle = a; galRotHasAngle = true; return; }
-  float d = a - galRotLastAngle;
-  if (d > (float)PI) d -= 2 * (float)PI;
-  if (d < -(float)PI) d += 2 * (float)PI;
-  galRotLastAngle = a;
-  galRotAccum += d;
-  if (!setRotating) {
-    if (fabsf(galRotAccum) < GAL_ROT_START) return;
-    setRotating = true;
-    galRotAccum = galRotAccum > 0 ? galRotAccum - GAL_ROT_START : galRotAccum + GAL_ROT_START;
-  }
-  // el anillo sigue al dedo: girar en sentido horario trae la voz siguiente arriba
-  while (galRotAccum >= SET_WHEEL_STEP) { galRotAccum -= SET_WHEEL_STEP; setSel = (setSel + SET_ITEMS - 1) % SET_ITEMS; sfxPlay(SFX_TAP); }
-  while (galRotAccum <= -SET_WHEEL_STEP) { galRotAccum += SET_WHEEL_STEP; setSel = (setSel + 1) % SET_ITEMS; sfxPlay(SFX_TAP); }
-  clockDirty = true;
+  if (wheelDrag(x, y, setSel, SET_ITEMS, setRotating)) clockDirty = true;
 }
 
 void settingsWheelEnd() {
-  float frac = galRotAccum / SET_WHEEL_STEP;
-  if (frac >= 0.5f) setSel = (setSel + SET_ITEMS - 1) % SET_ITEMS;
-  else if (frac <= -0.5f) setSel = (setSel + 1) % SET_ITEMS;
-  galRotAccum = 0;
-  setRotating = false;
+  wheelEnd(setSel, SET_ITEMS, setRotating);
   clockDirty = true;
 }
 

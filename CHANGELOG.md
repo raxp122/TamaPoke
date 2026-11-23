@@ -6,6 +6,16 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Food wheel**: the food button opens a wheel like the settings one with the
+  three berries, an **energy drink** and the candy (when you have one). The
+  favourite berry gives +40 FOOD and no hunger for an hour, but no more joy or
+  energy: joy comes from the games, energy from sleep or the drink (+30, three
+  a day).
+- **Sleep at night**: the light button puts the Pokémon to bed only between
+  19:00 and 9:00 ("Not sleepy" otherwise); at 9:00 it wakes up by itself
+  ("Good morning!"). Less than 8 hours of sleep in that window with the board
+  on is a slip-up ("Slept too little!"). A board switched off never counts.
+
 - **Type**: Pokémon with two types are judged on both, with the real
   multipliers of the games (×2, ×½, ×0 for each type): against Lotad
   (Grass/Water) Fire is neutral and no longer the right answer. The right

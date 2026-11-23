@@ -12,6 +12,7 @@
 //   rotate CX CY R DEG0 DEG1 [MS]  finger moving along an arc (DEG1 > DEG0: clockwise)
 //   gps none|search|fix  fake LC76G on the I2C bus (set it before the first command)
 //   tilt AX AY           board tilt in g (accelerometer x/y)
+//   hour H               set the clock to H:00 (pet sees it within 30 s: add a wait)
 //   pwr                  short press of the power button
 //   ota STATE            fake update state: idle | checking | uptodate | available | sprites | firmware | error
 //   shot NAME            save out/NAME.png and add NAME to the layout report
@@ -230,6 +231,9 @@ static void runScript(const std::string &path) {
     }
     else if (cmd == "rotshot") { ss >> shotName; }  // next rotate takes a shot while the finger is still turning
     else if (cmd == "gps") { std::string m; ss >> m; gSimGpsFix = m == "fix" ? 1 : (m == "search" ? 0 : -1); if (!booted) { setup(); booted = true; step(1500); } }
+    else if (cmd == "hour") {  // local clock to HH:00 of the same day (the sketch reads it within 30 s)
+      extern uint32_t rtcEpoch(); extern void rtcSetEpoch(uint32_t);
+      int h = 0; ss >> h; rtcSetEpoch((rtcEpoch() / 86400UL) * 86400UL + (uint32_t)h * 3600UL); }
     else if (cmd == "tilt") { extern float gSimAx, gSimAy; float fx = 0, fy = 0; ss >> fx >> fy; gSimAx = fx; gSimAy = fy; }
     else if (cmd == "pwr") { gSim.pwrPressed = true; step(600); }
     else if (cmd == "ota") { std::string s; ss >> s; gSim.otaStatus = otaFromName(s); step(400); }
