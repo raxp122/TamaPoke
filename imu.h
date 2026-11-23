@@ -9,6 +9,7 @@ void imuPoll(uint32_t nowMs, uint16_t intervalMs);
 bool imuShakeEdge();          // einmaliger Impuls, verbraucht das Event
 uint16_t imuTakeSteps();      // Delta seit dem letzten Aufruf
 float imuLastMagG();          // letzte |a| in g, 0 wenn unbekannt
+bool imuAccel(float *x, float *y, float *z);  // last acceleration vector in g (tilt)
 float imuLastGyroDps();       // letzte |gyro| in deg/s
 uint8_t imuAddr();            // 0 wenn nicht gefunden
 uint32_t imuPedometer();      // Rohzaehler des Chips

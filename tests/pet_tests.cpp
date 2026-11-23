@@ -186,6 +186,25 @@ static void testCatchRewardTrainsSpeedAndRecord() {
   EXPECT_EQ(pet.catchHi, 18);
 }
 
+static void testTiltRewardTrainsDefenseAndRecord() {
+  Pet pet = hatchedPet(25);
+  pet.trDef = 95;
+  pet.energy = 20;
+  pet.weight = 10;
+  pet.tiltHi = 4;
+
+  uint8_t gain = pet.applyTiltResult(9);
+
+  EXPECT_EQ(gain, 3);
+  EXPECT_EQ(pet.trDef, 98);
+  EXPECT_EQ(pet.tiltHi, 9);
+  EXPECT_EQ(pet.weight, 1);
+  EXPECT_TRUE(pet.energy >= 5);
+
+  pet.applyTiltResult(2);
+  EXPECT_EQ(pet.tiltHi, 9);
+}
+
 static void testMemoRewardTrainsDefenseAndRecord() {
   Pet pet = hatchedPet(1);
   pet.trDef = 99;
@@ -1219,6 +1238,7 @@ int main() {
   testCareMistakeDelaysEvolution();
   testTrainingRewardsClampAndAffectNeeds();
   testCatchRewardTrainsSpeedAndRecord();
+  testTiltRewardTrainsDefenseAndRecord();
   testMemoRewardTrainsDefenseAndRecord();
   testCleanRewardImprovesHygieneAndRecord();
   testTypeRewardTrainsAttackAndRecord();

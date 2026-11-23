@@ -101,7 +101,9 @@ An update must never force a reinstall over USB:
 - region and starter selection on a new save
 - evolution with branching, day/night, bond and stat conditions; it needs the
   species' level and at least three of the four needs above 40
-- wild battles, catching, training, five minigames, daily goals
+- wild battles, catching, training, daily goals and six minigames: Ball, Catch
+  (avoid the traps), Memo, Clean (rub the stains), Type (type chart quiz) and
+  Tilt (roll a Poké Ball by tilting the board)
 - expeditions with an item inventory, Hoenn tour sites and walking goals
 - profile, personality, medals, collector ranks and cosmetic frames
 - step counter with daily rewards (500 / 2,000 / 5,000 steps) and lifetime trail

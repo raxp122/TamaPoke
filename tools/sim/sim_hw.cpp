@@ -217,6 +217,8 @@ void imuPoll(uint32_t, uint16_t) {}
 bool imuShakeEdge() { return false; }
 uint16_t imuTakeSteps() { return 0; }
 float imuLastMagG() { return 1.0f; }
+float gSimAx = 0, gSimAy = 0;
+bool imuAccel(float *x, float *y, float *z) { *x = gSimAx; *y = gSimAy; *z = 1.0f; return true; }
 float imuLastGyroDps() { return 0; }
 uint8_t imuAddr() { return 0x6B; }
 uint32_t imuPedometer() { return 0; }

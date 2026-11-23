@@ -150,6 +150,7 @@ public:
   uint16_t memoHi = 0;     // record de rondas del minijuego memo
   uint16_t cleanHi = 0;    // record del minijuego clean
   uint16_t typeHi = 0;     // record del minijuego type match
+  uint16_t tiltHi = 0;     // record del minijuego INCLINA (acelerometro)
   uint16_t battleWins = 0, battleLosses = 0;
   uint16_t battleStreak = 0, bestBattleStreak = 0;
   uint8_t collectionFrame = 0;  // 0=Basis, weitere Rahmen ueber Dex-Meilensteine
@@ -193,6 +194,7 @@ public:
   uint8_t applyCatchResult(uint8_t score);
   uint8_t applyMemoResult(uint8_t rounds);
   uint8_t applyCleanResult(uint8_t score);
+  uint8_t applyTiltResult(uint8_t score);  // INCLINA: entrena DEF (equilibrio)
   uint8_t applyTypeResult(uint8_t score);
   bool applyPetEvent(uint8_t eventType);
   uint8_t interactPet(bool eveningBonus);
