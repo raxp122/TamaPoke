@@ -12,7 +12,7 @@ Build numbers are not consecutive: they count every CI run.
   The position is also written to the serial log. Boards without the module
   show "No GPS module".
 
-## Unreleased number (merged before GPS)
+## 1.37.31 — Summer time, README
 
 - Settings › Time: time zone and **summer time** (auto / always on / always off)
   next to the manual clock; the Wi-Fi page shows only the sync status.
