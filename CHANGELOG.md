@@ -6,6 +6,23 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Ball**: a tap sends the ball to a random height inside the screen (never
+  above the start), walls absorb energy instead of adding it, gravity and side
+  speed grow and the tap area shrinks (50 → 34 px) with the score: games end.
+- **Memo**: never the same colour twice in a row; a pause with all pads
+  flashing ("Get ready...") before every sequence, a sound when a round is
+  passed and when it is your turn.
+- **Type**: the rival is a real Pokémon with one or two types; the right answer
+  is super effective by the game's full type chart, wrong answers are resisted
+  (later also neutral); less time per question as the score grows.
+- **Catch**: traps appear from 4 points on: tapping one costs a life, letting it
+  go is fine.
+- **Clean**: stains must be rubbed away with the finger; a stain left too long
+  spreads and costs a life.
+- Score and record no longer touch the edge in Catch, Clean and Type.
+
+## 1.37.39 — Diagnostics
+
 - Info page: "LOOP MAX" no longer counts the light sleep of power saving (it
   showed up to ~750 ms that were sleep, not work) and names the slowest part of
   the loop (touch, render, save, sprite SD, wifi, gps, imu, pet).
