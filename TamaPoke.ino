@@ -190,8 +190,8 @@ uint8_t catchIcon = 0;
 #define TILT_FIELD_R 182      // radio del campo (centro de la pantalla)
 #define TILT_BALL_R 16
 #define TILT_HOLES 3
-#define TILT_SIGN_X 1.0f       // si en la placa la bola va al reves, cambiar el signo
-#define TILT_SIGN_Y 1.0f
+#define TILT_SIGN_X -1.0f      // el acelerometro mide la reaccion a la gravedad: lado bajado = valor negativo
+#define TILT_SIGN_Y -1.0f
 float tiltBX = 233, tiltBY = 233, tiltVX = 0, tiltVY = 0;
 float tiltNX = 0, tiltNY = 0;  // "plano" = como se sujetaba la placa al empezar
 int16_t tiltBerryX = 233, tiltBerryY = 160;

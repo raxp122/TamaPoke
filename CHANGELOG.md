@@ -6,8 +6,9 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
-- **Tilt**: tap the screen to set the current position as flat (useful if the
-  ball keeps rolling: hold the board level and tap).
+- **Tilt**: the ball now rolls towards the side you lower (both axes were
+  reversed); tap the screen to set the current position as flat (useful if
+  the ball keeps rolling: hold the board level and tap).
 - **Candy**: completing all three daily goals gives a candy (up to 9). It
   appears in the food menu only when you have one: it forgives a slip-up or,
   with none, gives +10 bond. The daily card shows how many you have.
