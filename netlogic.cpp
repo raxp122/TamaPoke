@@ -410,3 +410,11 @@ int32_t tzOffsetSeconds(uint8_t zone, uint32_t utc) {
   }
   return std + (dst ? 3600 : 0);
 }
+
+int32_t tzOffsetSecondsMode(uint8_t zone, uint32_t utc, uint8_t dstMode) {
+  if (zone == TZ_OFF || zone >= TZ_COUNT) return 0;
+  int32_t std = TZ_ZONES[zone].stdOffsetMin * 60;
+  if (dstMode == DSTM_ON) return std + 3600;
+  if (dstMode == DSTM_OFF) return std;
+  return tzOffsetSeconds(zone, utc);
+}

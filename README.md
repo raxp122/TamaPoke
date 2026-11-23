@@ -1,192 +1,158 @@
 # TamaPoke
 
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://raxp122.github.io/TamaPoke/)
+[![Latest release](https://img.shields.io/github/v/release/raxp122/TamaPoke?label=firmware&color=4F93C4)](https://github.com/raxp122/TamaPoke/releases/latest)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.36.2-4F93C4)
 ![Pokédex](https://img.shields.io/badge/Pok%C3%A9mon-386-E8503A)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 
 TamaPoke is a Pokémon-inspired virtual pet for the
-**Waveshare ESP32-S3-Touch-AMOLED-1.75**. This fork of ShadowEnemyx's expanded
-TamaPoke adds Wi-Fi and over-the-air updates.
+**Waveshare ESP32-S3-Touch-AMOLED-1.75**. This fork builds on
+[ShadowEnemyx's expanded TamaPoke](https://github.com/ShadowEnemyx/TamaPoke) and adds
+Wi-Fi with over-the-air updates, an internet clock and a redesigned interface
+for the round screen. What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
-## Install the current public version
+## Install
 
-### [Open the web installer](https://raxp122.github.io/TamaPoke/)
+### First installation: [web installer](https://raxp122.github.io/TamaPoke/)
 
-The hosted installer always serves the latest release (rebuilt on every merge
-into `main`) with all 386 Pokémon from Generations 1–3. Use desktop **Chrome or Edge**:
+Use desktop **Chrome or Edge** with the board connected by USB:
 
-1. Connect the Waveshare board by USB and install the firmware.
-2. When updating, leave **Erase device unchecked** to preserve the save.
-3. Reconnect the board in step 2 and load the sprites onto the microSD.
+1. Press **Connect board & install firmware** and pick the board's serial port.
+   Leave **Erase device unchecked** if the board already has a save.
+2. Optional: copy the sprites to the microSD with step 2 of the installer.
+   Without it, the first update over Wi-Fi downloads them (about 105 MB).
 
-No ZIP, Arduino project or manual `.bin` download is required.
+This is needed only once. If your computer does not see the board, try another
+USB cable (many only charge) or another computer: the board keeps its save.
 
-## Gen 3
+### Updates: over Wi-Fi
 
-Gen 3 is now public. The hosted installer uses the tested, debug-free `1.36.2`
-firmware. The local `dev.html` page remains available only for development and
-hardware diagnostics.
+Every merge into `main` publishes a release (`1.37.<build>`), and the device
+installs it from **Settings › UPDATE**. See [Wi-Fi and updates](#wi-fi-and-updates).
 
-> [!WARNING]
-> **A Gen‑3 installation always has two required steps.** Flashing firmware alone
-> is incomplete. The sprite button must then copy both `sprites.pak` (#1–251)
-> and `sprites-gen3-update.pak` (#252–386 plus the 386-entry thumbnail index) to
-> the microSD. There is intentionally no single `sprites-gen3-full.pak` file.
+## Controls
 
-## Highlights
+| Gesture | Action |
+|---|---|
+| Tap the Pokémon | pet it (synthetic chirp in full sound mode) |
+| Swipe up | cards: profile, personality, daily, box, battle, medals, progress, expedition, steps (swipe sideways to change card) |
+| Swipe down | settings |
+| Swipe sideways | Pokédex |
+| **Short PWR press** | **back**: closes the open screen; on the main screen it locks the display (PWR again wakes it) |
+| Long PWR press | power off |
+| Hold the Pokémon 3 s | release dialog |
+
+The main screen shows the four needs as arcs along the edge (**FOOD** and
+**ENE** on the left, **JOY** and **HYG** on the right, each with the icon of its
+button), the four action buttons along the bottom curve and the steps, day
+streak and battery at the top. While the Pokémon sleeps the screen dims only on
+the main screen.
+
+**Pokédex**: two buttons cycle the region (all, Kanto, Johto, Hoenn) and the
+filter (all, raised, caught, shiny). In the detail of a Pokémon, **circle your
+finger around the screen** to browse: clockwise goes forward, counter-clockwise
+back, and lifting the finger opens the Pokémon in the centre.
+
+## Settings
+
+Swipe down for a menu of big buttons:
+
+- **Time**: manual clock, **time zone** and **summer time** (auto, always on,
+  always off). With a time zone set, the clock is synced from the internet at
+  start-up and every hour.
+- **Sound & screen**: sound level, power saving, language (6 languages).
+- **Wi-Fi**: saved networks and automatic update check.
+- **Update**: installed and available version, check and install.
+- **Help** and **Info** (firmware, save, microSD, last save time, slowest loop).
+
+## Wi-Fi and updates
+
+- **Networks**: search, tap a network and type the password on the on-screen
+  keyboard (`ABC` upper case, `#+=` symbols). Up to **10 networks** are
+  remembered (home, work, hotspot…); when the list is full the one used least
+  recently is replaced. Tap a saved network to change its password, `X` twice to
+  forget it.
+- **AUTO**: at start-up and every 12 hours the device connects to the strongest
+  saved network, checks for an update and switches the radio off again. A new
+  version shows a short notice and an orange **UPDATE !** button in the settings.
+- **Install**: the device downloads the firmware and, only when they changed, the
+  sprites for the microSD. Both are checked with SHA-256 before use. The save game
+  stays where it is.
+
+### Safety
+
+An update must never force a reinstall over USB:
+
+- a new firmware is confirmed only after 45 seconds of running with enough free
+  memory; until then any crash or reset brings back the previous version;
+- three crashes in a row also go back to the previous version, and that version
+  is not offered automatically again;
+- CI refuses to publish when the partition table changes, the firmware gets close
+  to the 3 MB update slot or static RAM grows too much, and runs the screen
+  simulator with AddressSanitizer.
+
+## Game
 
 - 386 Pokémon from Kanto, Johto and Hoenn, including Shiny variants
-- region and starter selection on a new Gen‑3 save
-- six UI languages: English, German, Spanish, French, Italian and Portuguese
-- evolution with branching, day/night, bond and stat conditions
-- evolution care gate: strictly three of four needs above 40
-- persistent Pokédex/Box with raised and caught markers
-- wild battles, catching, training, five minigames and daily goals
-- expeditions with a small persistent item inventory, Hoenn tour sites and optional
-  walking goals (250 / 500 / 1,000 steps) that earn one extra item
+- region and starter selection on a new save
+- evolution with branching, day/night, bond and stat conditions; it needs the
+  species' level and at least three of the four needs above 40
+- wild battles, catching, training, five minigames, daily goals
+- expeditions with an item inventory, Hoenn tour sites and walking goals
 - profile, personality, medals, collector ranks and cosmetic frames
+- step counter with daily rewards (500 / 2,000 / 5,000 steps) and lifetime trail
+  ranks; walking also raises JOY and BOND within daily caps
 - RTC-based day/night and offline progression
 - synthetic species chirps and sound effects; no game audio or ROM samples
-- persistent step counter visible at top left and on the Steps/Trail card
-- complete browser save backup/restore with an automatic safety backup
-- Pokédex filters for region, raised, caught and Shiny Pokémon
-
-### Walking rewards
-
-Walking counts with the display on or off and also while USB is connected once
-the cadence filter confirms real rhythmic steps. Single bumps are rejected.
-
-- Daily rewards: **500 / 2,000 / 5,000** steps
-- Lifetime trail ranks: **10,000 / 50,000 / 100,000 / 250,000** steps
-- Walking slowly raises JOY and BOND within daily/hourly caps
-- Daily and lifetime steps improve wild Shiny odds and catching slightly
-
-## Basic controls
-
-- Tap the Pokémon: pet it and play its synthetic chirp in the full sound mode.
-- Swipe sideways: Pokédex/gallery.
-- Swipe up: Profile, Personality, Daily, Box, Battle, Medals, Progress,
-  Expedition and Steps/Trail cards (swipe sideways to change card).
-- Swipe down: clock, language, sound, power saving, Wi-Fi, updates and help.
-- **Short PWR press: back.** In any menu, card, Pokédex or dialog it closes the
-  current screen; on the main screen it locks the display (PWR again wakes it).
-- Hold the Pokémon for three seconds: release dialog.
-- Long PWR press: full power-off.
-
-Four needs decay over time: **FOOD, JOY, ENE and HYG**. Evolution requires the
-species' level and at least three of those four values strictly above 40.
-Evolution, farewell, release and runaway are always shown as decisions and do
-not complete unseen in the background.
-
-## Wi-Fi and over-the-air updates
-
-Swipe down to open the settings, then:
-
-- **WI-FI**: search for networks, tap one and type the password on the on-screen
-  keyboard (`ABC` upper case, `#+=` symbols). Up to **10 networks** are remembered
-  (home, work, phone hotspot…); when the list is full the one used least recently
-  is replaced. Tap a saved network to change its password, `X` twice to forget it.
-- **UPDATE**: checks GitHub for a newer release and installs it. The device
-  downloads the firmware and, only when they changed, the sprites for the microSD
-  (about 105 MB, a few minutes). The save game is kept. If the new firmware does
-  not start correctly, the bootloader goes back to the previous one.
-- **AUTO ON/OFF** (on the Wi-Fi page): with AUTO on, the device connects to the
-  strongest saved network at start-up (and every 12 hours), checks for an update
-  and switches the radio off again. A new version shows a short notice and an
-  orange `UPDATE!` button in the settings.
-
-Every merge into `main` builds and publishes a release automatically
-(`.github/workflows/release.yml`, version `1.37.<build>`).
-
-**First installation** of a firmware with OTA support has to be done once over
-USB with the [web installer](https://raxp122.github.io/TamaPoke/) (leave *Erase
-device* unchecked), or manually without erasing the flash: from the release write
-`tamapoke-bootloader.bin` at `0x0`, `tamapoke-partitions.bin` at `0x8000`,
-`tamapoke-boot_app0.bin` at `0xe000` and `tamapoke-app.bin` at `0x10000`.
+- browser save backup/restore in the web installer
 
 ## Hardware
 
-- Waveshare ESP32-S3-Touch-AMOLED-1.75 Standard or `-G`
+- Waveshare ESP32-S3-Touch-AMOLED-1.75 (standard or `-G`)
 - round 466×466 CO5300 AMOLED and CST9217 touch
-- 16 MB flash with OPI PSRAM
-- microSD, PCF85063 RTC, AXP2101 power management
+- 16 MB flash with OPI PSRAM, microSD, PCF85063 RTC, AXP2101 power management
 - QMI8658 IMU and ES8311 audio codec
 
-The `-B` model's supplied protective case does not fit the linked Pokéball case;
-the separate `1.75C` is a different board.
+The `-B` model's supplied case does not fit the linked Pokéball case; the
+`1.75C` is a different board.
 
-## Developer builds
+## Development
 
-Public release `1.36.2` includes the Hoenn expedition sites and the optional
-250/500/1,000-step tour goals. The local debug build is
-`1.36.2-hoenn-walk-local`; see [local test notes](HOENN_WALK_LOCAL.md).
-
-Board profile:
+Toolchain: ESP32 Arduino core `3.3.10`, GFX Library for Arduino `1.6.7`,
+SensorLib `0.4.1`, XPowersLib `0.3.3`.
 
 ```bash
-FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
+arduino-cli compile \
+  --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB" \
+  --build-property compiler.cpp.extra_flags=-DTAMAPOKE_GEN3_RELEASE --build-path build .
 ```
 
-Validated toolchain: ESP32 Arduino core `3.3.10`, GFX Library for Arduino
-`1.6.7`, SensorLib `0.4.1` and XPowersLib `0.3.3`.
-
-Build and validate without replacing installer artifacts:
+Native tests (pet, battle, Wi-Fi/OTA logic, time zones, gestures, web serial):
 
 ```bash
-bash tools/build_web.sh --check         # current public Gen 3, 386 Pokémon
-bash tools/build_web_local.sh --check   # Gen 3 debug build, 386 Pokémon
-bash tools/build_web_gen2_legacy.sh --check # pinned historical Gen 2 check
+cd tests && make CXX=clang++ clean test
 ```
 
-Build the local artifacts, serve the folder and open the required page:
+**Screen simulator** (`tools/sim`): runs the real sketch on a PC with simulated
+hardware, plays the scene scripts in `tools/sim/scenes/` (taps, swipes, finger
+rotation, PWR) and writes screenshots plus a layout report (elements outside the
+round panel, buttons smaller than 44 px) to `tools/sim/out/`:
 
 ```bash
-bash tools/build_web_local.sh           # or: bash tools/build_web_gen3.sh
-python3 -m http.server 8000 --directory web
+bash tools/sim/run.sh                 # all scenes
+SIM_SANITIZE=1 bash tools/sim/run.sh  # with AddressSanitizer/UBSan
 ```
 
-- `http://127.0.0.1:8000/` — current public Gen‑3 installer
-- `http://127.0.0.1:8000/dev.html` — Gen‑3 hardware/debug installer
-- `http://127.0.0.1:8000/release-gen3.html` — local release reference page
+CI (`.github/workflows/release.yml`) runs all of this on every push, attaches the
+screenshots to the build and, on `main`, publishes the release and the web
+installer.
 
-Never enable **Erase device** for an update whose save should be retained.
-
-### Sprite pipeline
-
-Sprites come from
-[PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab) and are generated
-and transferred with the repository tools:
-
-```bash
-python3 tools/pack_pmd.py
-python3 tools/make_thumbs.py
-python3 tools/pack_bundle.py
-python3 tools/pack_bundle.py --gen3
-python3 tools/send_sd.py
-```
-
-The safe complete Gen‑3 web flow sends the two sub-100-MB bundles sequentially.
-The smaller Gen‑3-only button remains available only on the debug page for a
-known-complete Gen‑2 card.
-
-## Tests
-
-```bash
-cd tests && make clean && make test
-cd ..
-bash tools/build_web.sh --check
-bash tools/build_web_local.sh --check
-bash tools/build_web_gen2_legacy.sh --check
-git diff --check
-```
-
-Hardware remains the final authority for display clipping, touch edges, IMU,
-speaker volume, microSD transfer and save retention. Core Gen‑3 flashing,
-sprites and step counting have already passed the owner's hardware smoke test;
-the extended release checklist is tracked in `AI_HANDOFF.md`.
+Sprites come from [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
+and are packed with `tools/pack_pmd.py`, `tools/make_thumbs.py` and
+`tools/pack_bundle.py`. The older local installer scripts (`tools/build_web*.sh`,
+`web/dev.html`) are kept for reference.
 
 ## Credits and license
 
@@ -194,7 +160,8 @@ This is a personal, non-commercial fan project and is not affiliated with or
 endorsed by Nintendo, Game Freak or The Pokémon Company.
 
 - Original project: [socquique/TamaPoke](https://github.com/socquique/TamaPoke)
-- Expanded fork and installer: [ShadowEnemyx/TamaPoke](https://github.com/ShadowEnemyx/TamaPoke)
+- Expanded fork: [ShadowEnemyx/TamaPoke](https://github.com/ShadowEnemyx/TamaPoke)
+- This fork: Wi-Fi, OTA updates, internet clock and round-screen interface
 - Animated pixel art: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab), CC BY-NC 4.0
 - 3D Pokéball case/remix: [MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi), CC BY-NC-SA
 - Source code: [MIT](LICENSE)

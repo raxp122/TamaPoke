@@ -30,6 +30,8 @@ più un installer da browser in `web/`.
 - Il salvataggio vive nell'NVS: niente migrazioni inutili, mai "Erase device"/cancellazione della flash negli
   aggiornamenti. La tabella partizioni (`app3M_fat9M_16MB`, due slot OTA) non si cambia senza un piano per i salvataggi.
 - Nuova logica: prima nei test nativi (`tests/`), poi UI e hardware.
+- Ogni PR aggiunge le sue modifiche in `CHANGELOG.md` (sezione "Next", in inglese); al merge la sezione
+  prende il numero della release pubblicata.
 - Testi della firmware solo ASCII (il font non ha accenti); ogni nuova stringa va aggiunta in tutte e 6 le lingue
   di `i18n.cpp` nello stesso ordine dell'enum in `i18n.h`.
 - Sprite sulla microSD: l'installer web manda `sprites.pak` + `sprites-gen3-update.pak`; l'OTA manda
