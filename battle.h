@@ -72,6 +72,9 @@ uint8_t wildLevelFor(uint8_t petLevel, uint8_t luckRoll);
 int16_t pickWildSpecies(uint8_t roll, uint8_t phase = 1);
 BattleStats wildBattleStats(int16_t dex, uint8_t level);
 uint8_t battleTypeEffectPct(uint8_t attackType, uint8_t defendType1, uint8_t defendType2);
+// moltiplicatore vero dei giochi (x2 / x0.5 / x0 per ogni tipo), in quarti:
+// 0 immune, 1 = x0.25, 2 = x0.5, 4 neutro, 8 = x2, 16 = x4. Per il quiz dei tipi.
+uint8_t battleTypeTrueQuarters(uint8_t attackType, uint8_t defendType1, uint8_t defendType2);
 BattleRuntime beginBattleRuntime(const BattleStats &player, const BattleStats &enemy);
 BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t luckRoll);
 

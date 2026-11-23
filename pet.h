@@ -15,6 +15,7 @@
 #define EVOLVE_ANIM_MS 5200UL              // animacion de evolucion (mas larga = mas epica)
 #define CEREMONY_MS 10000UL                // duracion de la despedida en pantalla
 #define FAREWELL_AGE_MIN (3UL * 24 * 60)   // se despide a los 3 dias de juego (en forma final)
+#define POOP_MIN_MINUTES 90                // nunca dos cacas en menos de 90 min (media ~2 h)
 #define MISTAKE_LOW_MINUTES 360           // descuido: 6 h seguidas con una necesidad a <= 10
 #define RUNAWAY_TICKS 720                  // lista para escaparse tras 12 h despierta con TODO a cero
 
@@ -367,7 +368,8 @@ private:
   int16_t eggTarget = 1;       // dex oculto que saldra del huevo
   bool eggShiny = false;       // sorpresa sorteada al crear el huevo
   uint8_t eggTaps = 0;
-  uint16_t lowMinutes = 0;      // minutos seguidos (despierto) con una necesidad a <= 10
+  uint16_t lowMinutes = 0;
+  uint16_t poopMinutes = 0;     // minutos despierto desde la ultima caca      // minutos seguidos (despierto) con una necesidad a <= 10
   uint8_t ticksSinceSave = 0;
   bool pendingSave = false;     // guardado periodico pendiente de volcar
   uint8_t evoDeclinedLv = 0;    // "mantener forma": no ofrecer hasta el siguiente nivel
