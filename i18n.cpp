@@ -77,6 +77,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Gira el dedo para pasar",
     "Hora verano: auto", "Hora verano: si", "Hora verano: no",
     "Sin modulo GPS (solo -G)", "Buscando satelites...", "Posicion encontrada", "Necesita antena y cielo abierto",
+    "Atento...",
+    "Frota las manchas!", "Evita las trampas!",
   },
   // ---------------- EN ----------------
   {
@@ -147,6 +149,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Circle your finger to browse",
     "Summer time: auto", "Summer time: on", "Summer time: off",
     "No GPS module (-G only)", "Searching satellites...", "Position found", "Needs the antenna and open sky",
+    "Get ready...",
+    "Rub the stains!", "Avoid the traps!",
   },
   // ---------------- FR ----------------
   {
@@ -217,6 +221,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Tourne le doigt pour defiler",
     "Heure d'ete: auto", "Heure d'ete: oui", "Heure d'ete: non",
     "Pas de GPS (modele -G)", "Recherche satellites...", "Position trouvee", "Antenne et ciel degage requis",
+    "Attention...",
+    "Frotte les taches!", "Evite les pieges!",
   },
   // ---------------- DE ----------------
   {
@@ -287,6 +293,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Finger kreisen: blaettern",
     "Sommerzeit: auto", "Sommerzeit: an", "Sommerzeit: aus",
     "Kein GPS-Modul (nur -G)", "Suche Satelliten...", "Position gefunden", "Braucht Antenne und freien Himmel",
+    "Achtung...",
+    "Flecken wegreiben!", "Fallen meiden!",
   },
   // ---------------- IT ----------------
   {
@@ -357,6 +365,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Gira il dito per scorrere",
     "Ora legale: auto", "Ora legale: si", "Ora legale: no",
     "Nessun GPS (solo -G)", "Ricerca satelliti...", "Posizione trovata", "Serve l'antenna e cielo aperto",
+    "Pronti...",
+    "Strofina le macchie!", "Evita le trappole!",
   },
   // ---------------- PT ----------------
   {
@@ -427,6 +437,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Gire o dedo para navegar",
     "Horario verao: auto", "Horario verao: sim", "Horario verao: nao",
     "Sem modulo GPS (so -G)", "Procurando satelites...", "Posicao encontrada", "Precisa de antena e ceu aberto",
+    "Atencao...",
+    "Esfregue as manchas!", "Evite as armadilhas!",
   },
 };
 

@@ -189,18 +189,28 @@ uint8_t gameGain = 0;
 uint32_t catchUntil = 0, catchTargetUntil = 0;
 int16_t catchX = 0, catchY = 0;
 uint8_t catchIcon = 0;
+#define CATCH_TRAP 3
 uint8_t memoSeq[14] = { 0 };
 uint8_t memoLen = 0, memoShow = 0, memoInput = 0, memoRounds = 0;
 uint32_t memoNextAt = 0;
+uint32_t memoReadyUntil = 0;  // los 4 botones encendidos: va a empezar la secuencia
 bool memoShowing = false;
 int8_t memoActivePad = -1, memoFlashPad = -1, memoHintPad = -1;
 bool memoFlashGood = false;
 uint32_t memoFlashUntil = 0, memoFailUntil = 0, memoTurnUntil = 0;
 int16_t cleanX[4] = { 0 }, cleanY[4] = { 0 };
 bool cleanAlive[4] = { false };
+int16_t cleanDirt[4] = { 0 }, cleanDirt0[4] = { 0 };  // cuanto falta frotar (px de recorrido)
+uint32_t cleanBorn[4] = { 0 };
+bool cleanRubHas = false;
+int16_t cleanRubX = 0, cleanRubY = 0;
+#define CLEAN_GAME_MS 25000
 uint32_t cleanUntil = 0, cleanSpawnAt = 0;
 uint8_t cleanActive = 0;
 uint8_t typeEnemy = TYPE_GRASS;
+uint8_t typeEnemy2 = TYPE_NONE;
+int16_t typeEnemyDex = 1;
+uint32_t typeDurationMs = 4200;
 uint8_t typeChoice[3] = { TYPE_FIRE, TYPE_WATER, TYPE_GRASS };
 uint8_t typeCorrect = 0;
 uint32_t typeUntil = 0;
@@ -1108,6 +1118,7 @@ void handleTouch() {
 
   if (pressed && !wasPressed) {  // empieza el gesto
     galRotHasAngle = false;
+    cleanRubHas = false;
     galRotAccum = 0;
     tX0 = tXl = x;
     tY0 = tYl = y;
@@ -1128,8 +1139,9 @@ void handleTouch() {
     tXl = x;
     tYl = y;
     if (!swallowGesture && galleryOpen && galleryDetail) galleryRotateDrag(x, y);
+    if (!swallowGesture && gameOpen && gameMode == 3) cleanRub(x, y);
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
-    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && !helpOpen && millis() - tStart > 3000 &&
+    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && !helpOpen && !gameOpen && millis() - tStart > 3000 &&
         abs(tXl - tX0) < 30 && abs(tYl - tY0) < 30 && inPetZone(tX0, tY0) &&
         !pet.isEgg() && !confirmUntil && !pet.ceremony) {
       confirmUntil = millis() + 10000;
@@ -2007,7 +2019,8 @@ void startGame() {
 void spawnCatchTarget() {
   catchX = 86 + random(294);
   catchY = 118 + random(206);
-  catchIcon = random(3);
+  // desde 4 puntos a veces sale una trampa: tocarla quita una vida, dejarla pasar no
+  catchIcon = (gameScore >= 4 && random(100) < 25) ? CATCH_TRAP : random(3);
   uint32_t life = 980;
   uint32_t speedup = (uint32_t)gameScore * 35;
   if (speedup > 530) speedup = 530;
@@ -2031,13 +2044,19 @@ void startCatchGame() {
 }
 
 void startMemoRound() {
-  if (memoLen < 14) memoSeq[memoLen++] = random(4);
+  if (memoLen < 14) {  // nunca el mismo color dos veces seguidas
+    uint8_t c;
+    do { c = random(4); } while (memoLen > 0 && c == memoSeq[memoLen - 1]);
+    memoSeq[memoLen++] = c;
+  }
   memoShow = 0;
   memoInput = 0;
   memoActivePad = -1;
   memoHintPad = -1;
   memoShowing = true;
-  memoNextAt = millis() + 350;
+  // pausa clara antes de cada secuencia: todos los botones se iluminan ("se repite")
+  memoNextAt = millis() + (memoLen > 1 ? 1300 : 700);
+  memoReadyUntil = memoNextAt;
   memoTurnUntil = 0;
 }
 
@@ -2065,6 +2084,9 @@ void spawnCleanSpot() {
     cleanX[i] = 88 + random(290);
     cleanY[i] = 122 + random(224);
     cleanAlive[i] = true;
+    int16_t dirt = 180 + gameScore * 8;
+    cleanDirt[i] = cleanDirt0[i] = dirt > 360 ? 360 : dirt;
+    cleanBorn[i] = millis();
     cleanActive++;
     return;
   }
@@ -2082,43 +2104,58 @@ void startCleanGame() {
   gameGain = 0;
   cleanActive = 0;
   for (uint8_t i = 0; i < 4; i++) cleanAlive[i] = false;
-  cleanUntil = millis() + 18000;
+  cleanUntil = millis() + CLEAN_GAME_MS;
   cleanSpawnAt = millis();
   spawnCleanSpot();
   sfxPlay(SFX_GAME_START);
 }
 
-static const uint8_t TYPE_DEF_POOL[] = {
-  TYPE_GRASS, TYPE_FIRE, TYPE_WATER, TYPE_ELECTRIC, TYPE_ROCK, TYPE_GROUND,
-  TYPE_FLYING, TYPE_POISON, TYPE_PSYCHIC, TYPE_GHOST, TYPE_DRAGON, TYPE_ICE
-};
-static const uint8_t TYPE_COUNTER_POOL[] = {
-  TYPE_FIRE, TYPE_WATER, TYPE_GRASS, TYPE_GROUND, TYPE_WATER, TYPE_WATER,
-  TYPE_ELECTRIC, TYPE_PSYCHIC, TYPE_BUG, TYPE_GHOST, TYPE_ICE, TYPE_FIRE
-};
-static const uint8_t TYPE_OPTION_POOL[] = {
+// tipos de ataque de la Gen 3 (sin hada)
+static const uint8_t TYPE_ATK_POOL[] = {
   TYPE_NORMAL, TYPE_FIRE, TYPE_WATER, TYPE_ELECTRIC, TYPE_GRASS, TYPE_ICE,
   TYPE_FIGHTING, TYPE_POISON, TYPE_GROUND, TYPE_FLYING, TYPE_PSYCHIC, TYPE_BUG,
-  TYPE_ROCK, TYPE_GHOST, TYPE_DRAGON
+  TYPE_ROCK, TYPE_GHOST, TYPE_DRAGON, TYPE_DARK, TYPE_STEEL
 };
+#define TYPE_ATK_COUNT ((int)sizeof(TYPE_ATK_POOL))
 
+// rival: un Pokemon de verdad (uno o dos tipos). Respuesta correcta: un tipo
+// superefectivo; las otras dos al principio resistidas, despues tambien neutras.
 void nextTypeQuestion() {
-  uint8_t q = (uint8_t)random(sizeof(TYPE_DEF_POOL));
-  typeEnemy = TYPE_DEF_POOL[q];
-  uint8_t correct = TYPE_COUNTER_POOL[q];
+  uint8_t good[TYPE_ATK_COUNT], ng = 0;
+  for (int tries = 0; tries < 60 && ng == 0; tries++) {
+    typeEnemyDex = 1 + random(DEX_COUNT);
+    typeEnemy = DEX_TBL[typeEnemyDex].type1;
+    typeEnemy2 = DEX_TBL[typeEnemyDex].type2;
+    ng = 0;
+    for (int i = 0; i < TYPE_ATK_COUNT; i++)
+      if (battleTypeEffectPct(TYPE_ATK_POOL[i], typeEnemy, typeEnemy2) > 100) good[ng++] = TYPE_ATK_POOL[i];
+  }
+  uint8_t correct = ng ? good[random(ng)] : TYPE_FIGHTING;
+  uint8_t worstAllowed = gameScore < 8 ? 99 : 100;  // tabla del juego: 120 super, 100 neutro, 85 resistido
+  uint8_t bad[TYPE_ATK_COUNT], nb = 0;
+  for (int i = 0; i < TYPE_ATK_COUNT; i++)
+    if (battleTypeEffectPct(TYPE_ATK_POOL[i], typeEnemy, typeEnemy2) <= worstAllowed) bad[nb++] = TYPE_ATK_POOL[i];
+  if (nb < 2) {  // pocos resistidos: tambien valen los neutros
+    nb = 0;
+    for (int i = 0; i < TYPE_ATK_COUNT; i++)
+      if (battleTypeEffectPct(TYPE_ATK_POOL[i], typeEnemy, typeEnemy2) <= 100) bad[nb++] = TYPE_ATK_POOL[i];
+  }
   typeCorrect = (uint8_t)random(3);
   for (uint8_t i = 0; i < 3; i++) typeChoice[i] = TYPE_NONE;
   typeChoice[typeCorrect] = correct;
   for (uint8_t i = 0; i < 3; i++) {
     if (i == typeCorrect) continue;
     uint8_t cand;
+    int guard = 0;
     do {
-      cand = TYPE_OPTION_POOL[random(sizeof(TYPE_OPTION_POOL))];
-    } while (cand == correct || cand == typeChoice[0] || cand == typeChoice[1] || cand == typeChoice[2] ||
-             battleTypeEffectPct(cand, typeEnemy, TYPE_NONE) > 100);
+      cand = bad[random(nb)];
+    } while ((cand == typeChoice[0] || cand == typeChoice[1] || cand == typeChoice[2]) && ++guard < 40);
     typeChoice[i] = cand;
   }
-  typeUntil = millis() + 4200;
+  // menos tiempo cuantos mas aciertos (5,2 s -> 3 s)
+  int ms = 5200 - gameScore * 110;
+  typeDurationMs = ms < 3000 ? 3000 : ms;
+  typeUntil = millis() + typeDurationMs;
 }
 
 void startTypeGame() {
@@ -2145,10 +2182,16 @@ void respawnBall() {
   ballVY = 2.05f;
 }
 
+// zona de toque: se reduce con los puntos (50 -> 34 px)
 int ballHitRadius() {
-  if (gameScore >= 20) return 38;
-  if (gameScore >= 8) return 44;
-  return 50;
+  int r = 50 - (gameScore * 16) / 30;
+  return r < 34 ? 34 : r;
+}
+
+// gravedad: crece con los puntos, asi la partida acelera de verdad
+float ballGravity() {
+  float g = 1.10f + gameScore * 0.045f;
+  return g > 3.2f ? 3.2f : g;
 }
 
 void gameTap(int16_t x, int16_t y) {
@@ -2176,14 +2219,20 @@ void gameTap(int16_t x, int16_t y) {
     if (now - ballLastHitAt < 260 || ballVY < -0.25f) return;
     gameScore++;
     sfxPlay(SFX_MINIGAME_OK);
-    float lift = 4.65f + (gameScore > 16 ? 1.7f : gameScore * 0.11f);
-    ballVY = -lift;
+    // el toque la manda a una altura al azar dentro de la pantalla, nunca por
+    // encima de donde empezo: la velocidad sale de la gravedad actual
+    float apex = 96.0f + random(110);
+    float rise = ballY - apex;
+    if (rise < 40.0f) rise = 40.0f;
+    ballVY = -sqrtf(2.0f * ballGravity() * rise);
     float drift = 0.38f + (gameScore >= 6 ? 0.08f : 0.0f) + (gameScore >= 14 ? 0.10f : 0.0f);
     float chaos = ((int)random(17) - 8) * 0.26f;
     ballVX += dx * drift + chaos;
     if (random(100) < 28) ballVX = -ballVX * (0.72f + random(45) * 0.01f);
-    if (ballVX > 11.5f) ballVX = 11.5f;
-    if (ballVX < -11.5f) ballVX = -11.5f;
+    float vxMax = 6.0f + gameScore * 0.12f;  // mas rapida de lado con los puntos
+    if (vxMax > 11.0f) vxMax = 11.0f;
+    if (ballVX > vxMax) ballVX = vxMax;
+    if (ballVX < -vxMax) ballVX = -vxMax;
     hitX = ballX;
     hitY = ballY;
     hitTime = now;
@@ -2202,6 +2251,12 @@ void catchTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
   int dx = x - catchX, dy = y - catchY;
   if (dx * dx + dy * dy <= 52 * 52) {
+    if (catchIcon == CATCH_TRAP) {  // trampa: cuenta como fallo
+      if (++gameMisses >= 3) { finishCatchGame(); return; }
+      sfxPlay(SFX_MINIGAME_BAD);
+      spawnCatchTarget();
+      return;
+    }
     gameScore++;
     hitX = catchX;
     hitY = catchY;
@@ -2259,7 +2314,10 @@ void memoTap(int16_t x, int16_t y) {
   if (memoInput >= memoLen) {
     memoRounds++;
     if (memoLen >= 14) finishMemoGame();
-    else startMemoRound();
+    else {
+      sfxPlay(SFX_MINIGAME_OK);  // ronda superada
+      startMemoRound();
+    }
   }
 }
 
@@ -2270,24 +2328,31 @@ void finishCleanGame() {
   gameOverUntil = millis() + 4000;
 }
 
-void cleanTap(int16_t x, int16_t y) {
+// LIMPIA: las manchas no se quitan con un toque, hay que frotarlas con el dedo
+void cleanTap(int16_t, int16_t) {}
+
+void cleanRub(int16_t x, int16_t y) {
   if (gameOverUntil) return;
+  if (!cleanRubHas) { cleanRubHas = true; cleanRubX = x; cleanRubY = y; return; }
+  int dx = x - cleanRubX, dy = y - cleanRubY;
+  int d = (int)sqrtf((float)(dx * dx + dy * dy));
+  cleanRubX = x;
+  cleanRubY = y;
+  if (d <= 0) return;
   for (uint8_t i = 0; i < 4; i++) {
     if (!cleanAlive[i]) continue;
-    int dx = x - cleanX[i], dy = y - cleanY[i];
-    if (dx * dx + dy * dy <= 38 * 38) {
-      cleanAlive[i] = false;
-      if (cleanActive) cleanActive--;
-      gameScore++;
-      hitX = cleanX[i];
-      hitY = cleanY[i];
-      hitTime = millis();
-      sfxPlay(SFX_MINIGAME_OK);
-      return;
-    }
+    int sx = x - cleanX[i], sy = y - cleanY[i];
+    if (sx * sx + sy * sy > 46 * 46) continue;
+    cleanDirt[i] -= d;
+    if (cleanDirt[i] > 0) continue;
+    cleanAlive[i] = false;
+    if (cleanActive) cleanActive--;
+    gameScore++;
+    hitX = cleanX[i];
+    hitY = cleanY[i];
+    hitTime = millis();
+    sfxPlay(SFX_MINIGAME_OK);
   }
-  if (++gameMisses >= 3) finishCleanGame();
-  else sfxPlay(SFX_MINIGAME_BAD);
 }
 
 void finishTypeGame() {
@@ -2316,10 +2381,7 @@ void typeTap(int16_t x, int16_t y) {
 }
 
 void stepGame() {
-  float grav = 1.14f + gameScore * 0.046f;
-  if (gameScore >= 5) grav += 0.14f;
-  if (gameScore >= 12) grav += 0.18f;
-  if (grav > 2.10f) grav = 2.10f;
+  float grav = ballGravity();
   ballVX += sinf((millis() + gameScore * 97) * 0.018f) * 0.11f;
   if (random(100) < 7) ballVX += ((int)random(7) - 3) * 0.22f;
   ballVY += grav;
@@ -2332,13 +2394,18 @@ void stepGame() {
     float nx = dx / d, ny = dy / d;
     float dot = ballVX * nx + ballVY * ny;
     if (dot > 0) {
-      ballVX = (ballVX - 2 * dot * nx) * 1.05f;
-      ballVY = (ballVY - 2 * dot * ny) * 0.88f;
+      // la pared absorbe energia (antes la anadia y la bola podia subir sin fin)
+      ballVX = (ballVX - 2 * dot * nx) * 0.9f;
+      ballVY = (ballVY - 2 * dot * ny) * 0.85f;
       ballVX += ((int)random(9) - 4) * 0.18f;
       sfxPlay(SFX_BALL_BOUNCE);
     }
     ballX = CX + nx * 205;
     ballY = CY + ny * 205;
+  }
+  if (ballY < 82 && ballVY < 0) {  // techo suave: nunca por encima de la salida
+    ballY = 82;
+    ballVY = -ballVY * 0.4f;
   }
   if (ballY > 384) {  // al suelo
     if (++gameMisses >= 3) {
@@ -2527,7 +2594,8 @@ void renderCatchGame() {
     return;
   }
   if (deadlineReached(now, catchTargetUntil)) {
-    if (++gameMisses >= 3) {
+    // dejar pasar una trampa esta bien; dejar escapar una baya es un fallo
+    if (catchIcon != CATCH_TRAP && ++gameMisses >= 3) {
       finishCatchGame();
       return;
     }
@@ -2544,19 +2612,35 @@ void renderCatchGame() {
   snprintf(score, sizeof(score), T(S_SCORE_FMT), gameScore);
   snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.catchHi);
   gfx->setTextSize(2);
-  gfx->setCursor(50, 78);
+  gfx->setCursor(74, 78);
   gfx->print(score);
-  gfx->setCursor(294, 78);
+  gfx->setCursor(392 - (int)strlen(rec) * 12, 78);
   gfx->print(rec);
   for (int i = 0; i < 3; i++) {
     if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
     else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
   }
-  const char *const *icon = catchIcon == 0 ? SPR_ICON_FOOD : (catchIcon == 1 ? SPR_ICON_BERRY_B : SPR_ICON_BERRY_G);
-  gfx->fillCircle(catchX, catchY, 34, UI_WHITE);
-  gfx->drawCircle(catchX, catchY, 36, UI_BAR_WARN);
-  drawMap(icon, 16, catchX - 24, catchY - 24, 3, false);
+  if (catchIcon == CATCH_TRAP) {  // trampa: bola oscura con aspa roja
+    gfx->fillCircle(catchX, catchY, 34, UI_INK);
+    gfx->drawCircle(catchX, catchY, 36, UI_BAR_BAD);
+    for (int k = -2; k <= 2; k++) {
+      gfx->drawLine(catchX - 16 + k, catchY - 16, catchX + 16 + k, catchY + 16, UI_BAR_BAD);
+      gfx->drawLine(catchX + 16 + k, catchY - 16, catchX - 16 + k, catchY + 16, UI_BAR_BAD);
+    }
+  } else {
+    const char *const *icon = catchIcon == 0 ? SPR_ICON_FOOD : (catchIcon == 1 ? SPR_ICON_BERRY_B : SPR_ICON_BERRY_G);
+    gfx->fillCircle(catchX, catchY, 34, UI_WHITE);
+    gfx->drawCircle(catchX, catchY, 36, UI_BAR_WARN);
+    drawMap(icon, 16, catchX - 24, catchY - 24, 3, false);
+  }
   int bw = 280;
+  if (gameScore >= 3 && gameScore <= 6) {  // aviso justo antes de las primeras trampas
+    const char *h = T(S_CATCH_HINT);
+    gfx->setTextColor(UI_BAR_BAD);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(h) * 6, 336);
+    gfx->print(h);
+  }
   int fw = (int)((uint32_t)bw * (catchUntil - now) / 20000);
   if (fw < 0) fw = 0;
   gfx->fillRoundRect(CX - bw / 2, 362, bw, 16, 5, UI_TRACK);
@@ -2584,6 +2668,7 @@ void stepMemoGame() {
       memoShowing = false;
       memoInput = 0;
       memoTurnUntil = now + 520;
+      sfxPlay(SFX_MENU);  // te toca
     } else {
       memoNextAt = now + 150;
     }
@@ -2619,8 +2704,9 @@ void renderMemoGame() {
   const int16_t py[4] = { 164, 164, 318, 318 };
   const uint16_t col[4] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98, UI_BAR_OK };
   int active = memoShowing ? memoActivePad : (memoFailUntil ? memoHintPad : -1);
+  bool ready = memoShowing && memoShow == 0 && memoActivePad < 0 && deadlineActive(millis(), memoReadyUntil);
   for (int i = 0; i < 4; i++) {
-    uint16_t fill = i == active ? lerp565(col[i], UI_WHITE, 5, 8) : col[i];
+    uint16_t fill = (i == active || (ready && (millis() / 250) % 2)) ? lerp565(col[i], UI_WHITE, 5, 8) : col[i];
     gfx->fillCircle(px[i], py[i], 48, fill);
     gfx->drawCircle(px[i], py[i], 52, ink);
     if (i == active) {
@@ -2634,7 +2720,7 @@ void renderMemoGame() {
   }
   char phase[28];
   if (memoFailUntil) snprintf(phase, sizeof(phase), "%s", T(S_MEMO_WRONG));
-  else if (memoShowing) snprintf(phase, sizeof(phase), "%s", T(S_MEMO_WATCH));
+  else if (memoShowing) snprintf(phase, sizeof(phase), "%s", ready ? T(S_MEMO_READY) : T(S_MEMO_WATCH));
   else snprintf(phase, sizeof(phase), T(S_MEMO_TURN_FMT), memoInput + 1, memoLen);
   // Freier Streifen zwischen den oberen und unteren Pads: dadurch bleibt die
   // Anleitung auf dem runden Display klar lesbar und liegt nicht auf Farben.
@@ -2657,9 +2743,18 @@ void renderCleanGame() {
     finishCleanGame();
     return;
   }
+  // una mancha que se queda demasiado se extiende: fallo
+  uint32_t life = 7500 - (uint32_t)(gameScore > 20 ? 20 : gameScore) * 150;
+  for (uint8_t i = 0; i < 4; i++) {
+    if (!cleanAlive[i] || now - cleanBorn[i] < life) continue;
+    cleanAlive[i] = false;
+    if (cleanActive) cleanActive--;
+    if (++gameMisses >= 3) { finishCleanGame(); return; }
+    sfxPlay(SFX_MINIGAME_BAD);
+  }
   if (deadlineReached(now, cleanSpawnAt)) {
-    if (cleanActive < 4) spawnCleanSpot();
-    cleanSpawnAt = now + 720 - (gameScore > 12 ? 260 : gameScore * 20);
+    if (cleanActive < 3) spawnCleanSpot();
+    cleanSpawnAt = now + 1600 - (gameScore > 12 ? 600 : gameScore * 50);
   }
   drawGameScene();
   bool night = sceneHour() < 6 || sceneHour() >= 20;
@@ -2672,9 +2767,9 @@ void renderCleanGame() {
   snprintf(score, sizeof(score), T(S_SCORE_FMT), gameScore);
   snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.cleanHi);
   gfx->setTextSize(2);
-  gfx->setCursor(50, 78);
+  gfx->setCursor(74, 78);
   gfx->print(score);
-  gfx->setCursor(294, 78);
+  gfx->setCursor(392 - (int)strlen(rec) * 12, 78);
   gfx->print(rec);
   for (int i = 0; i < 3; i++) {
     if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
@@ -2682,13 +2777,24 @@ void renderCleanGame() {
   }
   for (uint8_t i = 0; i < 4; i++) {
     if (!cleanAlive[i]) continue;
-    gfx->fillCircle(cleanX[i], cleanY[i], 26, C565(0x8a, 0x66, 0x45));
-    gfx->drawCircle(cleanX[i], cleanY[i], 28, UI_INK);
-    gfx->fillCircle(cleanX[i] - 8, cleanY[i] - 8, 5, C565(0x62, 0x45, 0x2e));
-    gfx->fillCircle(cleanX[i] + 10, cleanY[i] + 4, 6, C565(0x62, 0x45, 0x2e));
+    // la mancha encoge mientras se frota y se pone roja cuando esta a punto de extenderse
+    int r = 12 + (int)(26L * cleanDirt[i] / (cleanDirt0[i] ? cleanDirt0[i] : 1));
+    bool late = now - cleanBorn[i] > life * 2 / 3;
+    gfx->fillCircle(cleanX[i], cleanY[i], r, C565(0x8a, 0x66, 0x45));
+    gfx->drawCircle(cleanX[i], cleanY[i], r + 2, late ? UI_BAR_BAD : UI_INK);
+    if (late) gfx->drawCircle(cleanX[i], cleanY[i], r + 4, UI_BAR_BAD);
+    gfx->fillCircle(cleanX[i] - r / 3, cleanY[i] - r / 3, r / 5 + 1, C565(0x62, 0x45, 0x2e));
+    gfx->fillCircle(cleanX[i] + r / 3, cleanY[i] + r / 6, r / 4 + 1, C565(0x62, 0x45, 0x2e));
   }
   int bw = 280;
-  int fw = (int)((uint32_t)bw * (cleanUntil - now) / 18000);
+  if (now + CLEAN_GAME_MS - cleanUntil < 3500) {  // instruccion al empezar
+    const char *h = T(S_CLEAN_HINT);
+    gfx->setTextColor(ink);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(h) * 6, 330);
+    gfx->print(h);
+  }
+  int fw = (int)((uint32_t)bw * (cleanUntil - now) / CLEAN_GAME_MS);
   if (fw < 0) fw = 0;
   gfx->fillRoundRect(CX - bw / 2, 362, bw, 16, 5, UI_TRACK);
   if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 362, fw, 16, 5, UI_BAR_OK);
@@ -2722,22 +2828,27 @@ void renderTypeGame() {
   snprintf(score, sizeof(score), T(S_SCORE_FMT), gameScore);
   snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.typeHi);
   gfx->setTextSize(2);
-  gfx->setCursor(50, 78);
+  gfx->setCursor(74, 78);
   gfx->print(score);
-  gfx->setCursor(294, 78);
+  gfx->setCursor(392 - (int)strlen(rec) * 12, 78);
   gfx->print(rec);
   for (int i = 0; i < 3; i++) {
     if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
     else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
   }
 
-  const char *enemy = battleTypeName(typeEnemy);
-  gfx->fillRoundRect(118, 126, 230, 54, 14, lerp565(battleTypeColor(typeEnemy), UI_WHITE, 4, 8));
-  gfx->drawRoundRect(118, 126, 230, 54, 14, ink);
+  // rival: nombre y sus tipos (uno o dos)
+  gfx->fillRoundRect(90, 118, 286, 70, 14, lerp565(battleTypeColor(typeEnemy), UI_WHITE, 5, 8));
+  gfx->drawRoundRect(90, 118, 286, 70, 14, ink);
+  const char *enemyName = dexName(typeEnemyDex);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(enemy) * 9, 143);
-  gfx->print(enemy);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(enemyName) * 6, 128);
+  gfx->print(enemyName);
+  int cw1 = typeChipWidth(typeEnemy), cw2 = typeEnemy2 != TYPE_NONE ? typeChipWidth(typeEnemy2) : 0;
+  int cx0 = CX - (cw1 + (cw2 ? cw2 + 8 : 0)) / 2;
+  drawTypeChip(cx0, 156, typeEnemy);
+  if (cw2) drawTypeChip(cx0 + cw1 + 8, 156, typeEnemy2);
 
   for (int i = 0; i < 3; i++) {
     int bx = 88;
@@ -2751,7 +2862,7 @@ void renderTypeGame() {
     gfx->print(label);
   }
   int bw = 280;
-  int fw = (int)((uint32_t)bw * (typeUntil - now) / 4200);
+  int fw = (int)((uint32_t)bw * (typeUntil - now) / typeDurationMs);
   if (fw < 0) fw = 0;
   gfx->fillRoundRect(CX - bw / 2, 392, bw, 14, 5, UI_TRACK);
   if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 392, fw, 14, 5, UI_BAR_OK);
