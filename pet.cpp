@@ -427,6 +427,10 @@ void Pet::noteDailyGoal(uint8_t goalType, uint8_t amount) {
     if (dailyGoalProgress[i] >= target) {
       dailyGoalDone |= (1 << i);
       applyDailyReward();
+      if (dailyGoalDone == (1 << DAILY_GOAL_COUNT) - 1 && candies < 9) {  // las 3 del dia: caramela
+        candies++;
+        candyRewardUntil = millis() + 4000;
+      }
       heartUntil = millis() + HEART_MS;
       sfxPlay(SFX_DAILY_GOAL);
     }
@@ -897,6 +901,7 @@ void Pet::feedBerry(uint8_t color) {
   if (lovesBerry(color)) {
     fullness = clamp100(fullness + 35);
     joy = clamp100(joy + 10);
+    energy = clamp100(energy + 5);     // la preferida da un poco de energia
     heartUntil = millis() + HEART_MS;  // "le encanta!"
     berryKnown = true;                 // descubierto: se muestra en la ficha
     addBond(2);
@@ -906,6 +911,32 @@ void Pet::feedBerry(uint8_t color) {
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
   noteDailyGoal(DAILY_GOAL_CARE, 1);
+  save();
+}
+
+uint8_t Pet::useCandy() {
+  if (ceremony != CER_NONE || isEgg() || sleeping || candies == 0) return 0;
+  candies--;
+  uint8_t kind;
+  if (careMistakes > 0) {  // la caramella perdona una svista
+    careMistakes--;
+    kind = 1;
+  } else {
+    addBond(10);
+    kind = 2;
+  }
+  fullness = clamp100(fullness + 10);
+  joy = clamp100(joy + 10);
+  weight = clamp100(weight + 5);
+  eatUntil = millis() + EAT_ANIM_MS;
+  heartUntil = millis() + HEART_MS;
+  registerCare();
+  save();
+  return kind;
+}
+
+void Pet::setFrameAuto(bool on) {
+  frameAuto = on;
   save();
 }
 
@@ -1622,6 +1653,8 @@ void Pet::save() {
   prefs.putUShort("bstk", battleStreak);
   prefs.putUShort("bbstk", bestBattleStreak);
   prefs.putUChar("cfrm", collectionFrame);
+  prefs.putBool("frauto", frameAuto);
+  prefs.putUChar("candy", candies);
   prefs.putUInt("pimin", lastPetInteractMinute);
   // dxrew was an 8-bit mask in releases through v1.35.3. Keep its low byte
   // for downgrade compatibility and store the complete mask separately.
@@ -1721,6 +1754,9 @@ void Pet::load() {
   bestBattleStreak = prefs.getUShort("bbstk", 0);
   collectionFrame = prefs.getUChar("cfrm", 0);
   if (collectionFrame >= unlockedCollectionFrameCount()) collectionFrame = 0;
+  frameAuto = prefs.getBool("frauto", true);
+  candies = prefs.getUChar("candy", 0);
+  if (candies > 9) candies = 9;
   lastPetInteractMinute = prefs.getUInt("pimin", 0);
   dexRewardMask = prefs.isKey("dxrw2")
                     ? prefs.getUShort("dxrw2", 0)

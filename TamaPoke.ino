@@ -33,7 +33,7 @@
 
 // arcos de las barras de necesidades (ver drawBars): pixeles precalculados
 struct ArcPix { uint16_t x, y; uint8_t t; };
-struct ArcShape { float startDeg, endDeg; ArcPix *pix; uint16_t n; };
+struct ArcShape { float startDeg, endDeg; ArcPix *pix; uint16_t n; int16_t rIn, rOut; };  // rIn/rOut 0 = barras
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
@@ -124,10 +124,6 @@ uint8_t nameLen = 0;
 #define BOX_SORT_W 140
 #define BOX_SORT_H 44
 #define PROFILE_FRAME_Y 336
-#define PROFILE_ARROW_W 64
-#define PROFILE_ARROW_H 46
-#define PROFILE_PREV_X 80
-#define PROFILE_NEXT_X 322
 uint8_t cardPage = 0;         // 0 perfil ... 7 expedicion, 8 pasos/trail
 uint8_t boxPage = 0;
 uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
@@ -201,7 +197,7 @@ float tiltNX = 0, tiltNY = 0;  // "plano" = como se sujetaba la placa al empezar
 int16_t tiltBerryX = 233, tiltBerryY = 160;
 int16_t tiltHoleX[TILT_HOLES], tiltHoleY[TILT_HOLES];
 uint8_t tiltHoleCount = 0;
-uint32_t tiltUntil = 0, tiltSafeUntil = 0;
+uint32_t tiltUntil = 0, tiltSafeUntil = 0, tiltCalibUntil = 0;
 #define CATCH_TRAP 3
 uint8_t memoSeq[14] = { 0 };
 uint8_t memoLen = 0, memoShow = 0, memoInput = 0, memoRounds = 0;
@@ -623,6 +619,14 @@ void loop() {
   if (runReady && !wasRunReady) sfxPlay(SFX_DENY);
   wasRunReady = runReady;
 
+  static uint8_t candiesSeen = 255;
+  if (candiesSeen == 255) candiesSeen = pet.candies;
+  if (pet.candies > candiesSeen) {  // 3 metas del dia: caramela
+    snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_CANDY_EARNED));
+    petEventFeedbackUntil = now + 3500;
+    sfxPlay(SFX_MEDAL);
+  }
+  candiesSeen = pet.candies;
   PERF_SECTION("touch", handleTouch());
   PERF_SECTION("serial", handleSerial());
   PERF_SECTION("wifi", netService(now));
@@ -1415,18 +1419,6 @@ void onTap(int16_t x, int16_t y) {
       speciesChirpPlay(pet.speciesId, true);
     }
     else if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 0 && y >= PROFILE_FRAME_Y && y <= PROFILE_FRAME_Y + PROFILE_ARROW_H) {
-      uint8_t count = pet.unlockedCollectionFrameCount();
-      uint8_t next = pet.collectionFrame;
-      if (x >= PROFILE_PREV_X && x <= PROFILE_PREV_X + PROFILE_ARROW_W) next = pet.collectionFrame == 0 ? count - 1 : pet.collectionFrame - 1;
-      else if (x >= PROFILE_NEXT_X && x <= PROFILE_NEXT_X + PROFILE_ARROW_W) next = (uint8_t)((pet.collectionFrame + 1) % count);
-      else return;
-      if (pet.setCollectionFrame(next)) {
-        cardDirty = true;
-        sfxPlay(SFX_MENU);
-        lockTouchBrief();
-      }
-    }
     else if (cardPage == 3) {
       if (x >= BOX_SORT_X && x <= BOX_SORT_X + BOX_SORT_W && y >= BOX_SORT_Y && y <= BOX_SORT_Y + BOX_SORT_H) {
         boxSort = (boxSort + 1) % 3;
@@ -1560,11 +1552,25 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (feedMenuUntil) {       // selector de comida
-    if (deadlineActive(millis(), feedMenuUntil) && y >= FEED_MENU_Y && y <= FEED_MENU_Y + 64 && x >= 101 && x <= 365) {
-      int item = (x - 101) / 66;
-      if (item == 3) pet.feedCandy();
-      else pet.feedBerry(item);
-      sfxPlay(SFX_EAT);
+    int n = pet.candies ? 4 : 3, mx = CX - n * 33;
+    if (deadlineActive(millis(), feedMenuUntil) && y >= FEED_MENU_Y && y <= FEED_MENU_Y + 64 && x >= mx && x < mx + n * 66) {
+      int item = (x - mx) / 66;
+      if (item == 3) {
+        uint8_t kind = pet.useCandy();
+        if (kind) {
+          snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(kind == 1 ? S_CANDY_FORGIVE : S_CANDY_BOND));
+          petEventFeedbackUntil = millis() + 2200;
+          sfxPlay(SFX_MEDAL);
+        }
+      } else {
+        bool fav = pet.lovesBerry(item);
+        pet.feedBerry(item);
+        sfxPlay(SFX_EAT);
+        if (fav) {  // la preferida: un aviso propio
+          snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_FAVORITE));
+          petEventFeedbackUntil = millis() + 1800;
+        }
+      }
     }
     feedMenuUntil = 0;
     return;
@@ -1913,6 +1919,7 @@ void render() {
     drawExpeditionHud();
     drawBars();
     drawButtons();
+    drawBatteryArc();
     drawCelebration();
     drawPetEvent();
     if (gameMenuOpen) drawGameMenu();
@@ -1951,12 +1958,23 @@ void render() {
     if (deadlineReached(millis(), feedMenuUntil)) {
       feedMenuUntil = 0;
     } else {
-      gfx->fillRoundRect(101, FEED_MENU_Y, 264, 64, 14, UI_WHITE);
-      gfx->drawRoundRect(101, FEED_MENU_Y, 264, 64, 14, inkColor());
-      drawMap(SPR_ICON_FOOD, 16, 110, FEED_MENU_Y + 8, 3, false);
-      drawMap(SPR_ICON_BERRY_B, 16, 176, FEED_MENU_Y + 8, 3, false);
-      drawMap(SPR_ICON_BERRY_G, 16, 242, FEED_MENU_Y + 8, 3, false);
-      drawMap(SPR_ICON_CANDY, 16, 308, FEED_MENU_Y + 8, 3, false);
+      // 3 bayas; la caramela solo aparece si hay alguna (premio de las 3 metas del dia)
+      int n = pet.candies ? 4 : 3, mw = n * 66;
+      int mx = CX - mw / 2;
+      gfx->fillRoundRect(mx, FEED_MENU_Y, mw, 64, 14, UI_WHITE);
+      gfx->drawRoundRect(mx, FEED_MENU_Y, mw, 64, 14, inkColor());
+      drawMap(SPR_ICON_FOOD, 16, mx + 9, FEED_MENU_Y + 8, 3, false);
+      drawMap(SPR_ICON_BERRY_B, 16, mx + 75, FEED_MENU_Y + 8, 3, false);
+      drawMap(SPR_ICON_BERRY_G, 16, mx + 141, FEED_MENU_Y + 8, 3, false);
+      if (pet.candies) {
+        drawMap(SPR_ICON_CANDY, 16, mx + 207, FEED_MENU_Y + 8, 3, false);
+        char cn[6];
+        snprintf(cn, sizeof(cn), "x%u", pet.candies);
+        gfx->setTextColor(UI_INK);
+        gfx->setTextSize(1);
+        gfx->setCursor(mx + 246, FEED_MENU_Y + 50);
+        gfx->print(cn);
+      }
     }
   }
 
@@ -2228,7 +2246,15 @@ void gameTap(int16_t x, int16_t y) {
     typeTap(x, y);
     return;
   }
-  if (gameMode == 5) return;  // INCLINA se juega solo inclinando
+  if (gameMode == 5) {  // INCLINA: un toque fija como "plano" la posicion actual
+    if (gameOverUntil) return;
+    float ax, ay, az;
+    if (imuAccel(&ax, &ay, &az)) { tiltNX = ax; tiltNY = ay; }
+    tiltVX = tiltVY = 0;
+    tiltCalibUntil = millis() + 1200;
+    sfxPlay(SFX_MENU);
+    return;
+  }
   if (gameOverUntil) return;
   float dx = ballX - x, dy = ballY - y;
   int hitRadius = ballHitRadius();
@@ -3027,11 +3053,21 @@ void renderTiltGame() {
     if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
     else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
   }
-  if (now + TILT_GAME_MS - tiltUntil < 3000) {
-    const char *h = T(S_TILT_HINT);
+  if (deadlineActive(now, tiltCalibUntil)) {
+    const char *h = T(S_TILT_CALIB);
+    gfx->setTextColor(UI_BAR_OK);
     gfx->setTextSize(2);
     gfx->setCursor(CX - (int)strlen(h) * 6, 330);
     gfx->print(h);
+  } else if (now + TILT_GAME_MS - tiltUntil < 4000) {
+    const char *h = T(S_TILT_HINT);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(h) * 6, 322);
+    gfx->print(h);
+    const char *h2 = T(S_TILT_CALIB_HINT);
+    gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(h2) * 3, 344);
+    gfx->print(h2);
   }
   int bw = 220;
   int fw = (int)((uint32_t)bw * (tiltUntil - now) / TILT_GAME_MS);
@@ -4115,6 +4151,10 @@ static void renderSettingsSound() {
   char lp[32];
   snprintf(lp, sizeof(lp), "%s: %s  >", T(S_LANG_LABEL), LANG_CODES[gLang]);
   setButton(SET_BIG_X, 244, SET_BIG_W, SET_BIG_H, lp, UI_WHITE, UI_INK, 2);
+  char fl[32];
+  if (pet.frameAuto) snprintf(fl, sizeof(fl), "%s  >", T(S_FRAME_AUTO));
+  else { snprintf(fl, sizeof(fl), T(S_FRAME_SET_FMT), pet.collectionFrame + 1, pet.unlockedCollectionFrameCount()); strncat(fl, "  >", sizeof(fl) - strlen(fl) - 1); }
+  setButton(SET_BIG_X, 316, SET_BIG_W, SET_BIG_H, fl, UI_WHITE, UI_INK, 2);
 }
 
 static void renderSettingsInfo() {
@@ -4257,6 +4297,14 @@ void clockTap(int16_t x, int16_t y) {
         sfxPlay(powerSave ? SFX_MENU : SFX_TAP);
       } else if (y >= 244 && y < 244 + SET_BIG_H) {
         setLang((Lang)((gLang + 1) % LANG_COUNT));
+        clockDirty = true;
+        sfxPlay(SFX_TAP);
+      } else if (y >= 316 && y < 316 + SET_BIG_H) {
+        // cornice: AUTO -> 1 -> 2 ... -> ultima -> AUTO
+        uint8_t n = pet.unlockedCollectionFrameCount();
+        if (pet.frameAuto) { pet.setCollectionFrame(0); pet.setFrameAuto(false); }
+        else if (pet.collectionFrame + 1 < n) pet.setCollectionFrame(pet.collectionFrame + 1);
+        else pet.setFrameAuto(true);
         clockDirty = true;
         sfxPlay(SFX_TAP);
       }
@@ -4909,7 +4957,7 @@ void renderCardProfile() {
     gfx->printf("(%s)", speciesName);
   }
 
-  drawCollectionFrame(pet.collectionFrame);
+  drawCollectionFrame(pet.displayFrame());
   if (pmd.loaded) drawPmdAct(PMD_IDLE, CX, 206, millis(), true, false, 4);
 
   // racha con llama
@@ -4945,31 +4993,20 @@ void renderCardProfile() {
   const char *rank = T((StrId)(S_RANK_TRAINER + pet.collectionRank()));
   char known[22], frame[22];
   snprintf(known, sizeof(known), T(S_KNOWN_FMT), pet.knownDexCount(), DEX_COUNT);
-  snprintf(frame, sizeof(frame), T(S_FRAME_FMT), pet.collectionFrame + 1, pet.unlockedCollectionFrameCount());
-  // cornice della collezione: frecce grandi ai lati, testo al centro
+  (void)frame;
+  // grado de coleccionista: nombre y cuantos Pokemon conoces (la cornice se elige en Ajustes)
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(1);
   gfx->setCursor(CX - (int)strlen(T(S_COLLECTION)) * 3, PROFILE_FRAME_Y + 4);
   gfx->print(T(S_COLLECTION));
-  gfx->setTextColor(collectionFrameColor(pet.collectionFrame));
-  gfx->setCursor(CX - (int)strlen(rank) * 3, PROFILE_FRAME_Y + 18);
-  gfx->print(rank);
-  gfx->setTextColor(UI_INK);
-  gfx->setCursor(CX - (int)strlen(frame) * 3, PROFILE_FRAME_Y + 32);
-  gfx->print(frame);
-  (void)known;
-  bool many = pet.unlockedCollectionFrameCount() > 1;
-  gfx->fillRoundRect(PROFILE_PREV_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_WHITE : UI_BG_DAY);
-  gfx->drawRoundRect(PROFILE_PREV_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_INK : UI_TRACK);
-  gfx->fillRoundRect(PROFILE_NEXT_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_WHITE : UI_BG_DAY);
-  gfx->drawRoundRect(PROFILE_NEXT_X, PROFILE_FRAME_Y, PROFILE_ARROW_W, PROFILE_ARROW_H, 12, many ? UI_INK : UI_TRACK);
-  gfx->setTextColor(many ? UI_INK : UI_TRACK);
-  gfx->setTextSize(3);
-  gfx->setCursor(PROFILE_PREV_X + (PROFILE_ARROW_W - 18) / 2, PROFILE_FRAME_Y + 11);
-  gfx->print("<");
-  gfx->setCursor(PROFILE_NEXT_X + (PROFILE_ARROW_W - 18) / 2, PROFILE_FRAME_Y + 11);
-  gfx->print(">");
+  gfx->setTextColor(pet.displayFrame() ? collectionFrameColor(pet.displayFrame()) : UI_INK);
   gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(rank) * 6, PROFILE_FRAME_Y + 16);
+  gfx->print(rank);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(known) * 3, PROFILE_FRAME_Y + 38);
+  gfx->print(known);
 }
 
 StrId personalityNameId(PetPersonality p) {
@@ -5134,6 +5171,12 @@ void renderCardDaily() {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(bonus) * 6, 324);
   gfx->print(bonus);
+  char candy[40];
+  snprintf(candy, sizeof(candy), T(S_CANDY_DAILY_FMT), pet.candies);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(candy) * 3, 348);
+  gfx->print(candy);
 }
 
 
@@ -5559,11 +5602,10 @@ void drawStepsHud() {
     gfx->print(st);
     left = fx + 18 + (int)strlen(st) * 6;
   }
-  drawBattery();
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
   int tw = (int)strlen(label) * 12;
-  int avail = STEP_HUD_X + STEP_HUD_W - (batPercent() >= 0 ? 42 : 6) - left;
+  int avail = STEP_HUD_X + STEP_HUD_W - 6 - left;
   gfx->setCursor(left + (avail - tw) / 2, STEP_HUD_Y + 15);
   gfx->print(label);
 }
@@ -5573,7 +5615,9 @@ bool expeditionHudVisible() {
       galleryOpen || kbOpen || clockOpen || helpOpen) return false;
   if (gameMenuOpen || feedMenuUntil || confirmUntil || choiceKind || bathUntil ||
       petEventUntil || wildPromptUntil) return false;
-  return pet.expeditionHudState(expeditionNowEpoch()) != EXP_HUD_HIDDEN;
+  // la bolsa con objetos se ve en la ficha de expedicion, no fija en la pantalla principal
+  ExpeditionHudState st = pet.expeditionHudState(expeditionNowEpoch());
+  return st == EXP_HUD_ACTIVE || st == EXP_HUD_READY;
 }
 
 bool inExpeditionHudHit(int16_t x, int16_t y) {
@@ -6861,16 +6905,17 @@ static void arcPoint(float deg, float r, int &x, int &y) {
 }
 
 static void buildArc(ArcShape &a) {
+  const int ARC_IN = a.rIn ? a.rIn : ARC_R_IN, ARC_OUT = a.rOut ? a.rOut : ARC_R_OUT;
   float lo = a.startDeg < a.endDeg ? a.startDeg : a.endDeg;
   float hi = a.startDeg < a.endDeg ? a.endDeg : a.startDeg;
-  float rMid = (ARC_R_IN + ARC_R_OUT) / 2.0f, capR = (ARC_R_OUT - ARC_R_IN) / 2.0f + 0.5f;
+  float rMid = (ARC_IN + ARC_OUT) / 2.0f, capR = (ARC_OUT - ARC_IN) / 2.0f + 0.5f;
   int sx, sy, ex, ey;
   arcPoint(a.startDeg, rMid, sx, sy);
   arcPoint(a.endDeg, rMid, ex, ey);
   // solo el rectangulo que contiene el arco (antes se recorria toda la pantalla)
   int bx0 = LCD_WIDTH, by0 = LCD_HEIGHT, bx1 = 0, by1 = 0;
   for (float dg = lo; dg <= hi + 0.01f; dg += 1.0f) {
-    for (int r = ARC_R_IN - 9; r <= ARC_R_OUT + 1; r += ARC_R_OUT + 10 - ARC_R_IN) {
+    for (int r = ARC_IN - 9; r <= ARC_OUT + 1; r += ARC_OUT + 10 - ARC_IN) {
       int px, py;
       arcPoint(dg, r, px, py);
       if (px < bx0) bx0 = px; if (px > bx1) bx1 = px;
@@ -6884,11 +6929,11 @@ static void buildArc(ArcShape &a) {
     for (int y = by0; y <= by1; y++) {
       for (int x = bx0; x <= bx1; x++) {
         float dx = x - CX, dy = y - CY, r2 = dx * dx + dy * dy;
-        if (r2 < (ARC_R_IN - 9) * (ARC_R_IN - 9) || r2 > (ARC_R_OUT + 1) * (ARC_R_OUT + 1)) continue;
+        if (r2 < (ARC_IN - 9) * (ARC_IN - 9) || r2 > (ARC_OUT + 1) * (ARC_OUT + 1)) continue;
         float deg = atan2f(dy, dx) * 180.0f / (float)PI;
         if (deg < 0) deg += 360.0f;
         float t;
-        bool inRing = r2 >= ARC_R_IN * ARC_R_IN && r2 <= ARC_R_OUT * ARC_R_OUT;
+        bool inRing = r2 >= ARC_IN * ARC_IN && r2 <= ARC_OUT * ARC_OUT;
         if (inRing && deg >= lo && deg <= hi) {
           t = (deg - a.startDeg) / (a.endDeg - a.startDeg);
         } else if ((x - sx) * (x - sx) + (y - sy) * (y - sy) <= capR * capR) {
@@ -6928,6 +6973,41 @@ static void drawNeedArc(ArcShape &a, uint8_t val, const char *const *icon) {
   gfx->drawCircle(ix, iy, 19, fill);
   gfx->drawCircle(ix, iy, 18, fill);
   drawMap(icon, 16, ix - 16, iy - 16, 2, false);
+}
+
+// bateria: arco fino abajo, bajo los botones (solo con bateria conectada)
+static ArcShape batteryArc = { 118, 62, nullptr, 0, 212, 219 };
+
+void drawBatteryArc() {
+  int pc = batPercent();
+  if (pc < 0) return;
+  if (!batteryArc.pix) buildArc(batteryArc);
+  bool charging = batCharging();
+  uint16_t fill = charging ? UI_BAR_OK : (pc >= 40) ? UI_BAR_OK : (pc >= 15) ? UI_BAR_WARN : UI_BAR_BAD;
+  uint16_t track = gNight ? 0x4208 : UI_TRACK;
+  uint16_t *fb = gfx->getFramebuffer();
+  uint16_t limit = (uint16_t)(pc * 255 / 100);
+  if (fb && batteryArc.pix) {
+    for (uint16_t i = 0; i < batteryArc.n; i++) {
+      const ArcPix &p = batteryArc.pix[i];
+      fb[p.y * LCD_WIDTH + p.x] = (pc && p.t <= limit) ? fill : track;
+    }
+  }
+  char t[8];
+  snprintf(t, sizeof(t), "%d%%", pc);
+  int tw = (int)strlen(t) * 6 + (charging ? 9 : 0);
+  int tx = CX - tw / 2;
+  gfx->fillRoundRect(tx - 5, 426, tw + 10, 15, 7, gNight ? 0x2104 : UI_WHITE);  // legible sobre cualquier fondo
+  if (charging) {  // rayo de carga
+    uint16_t bolt = C565(0xff, 0xd9, 0x4a);
+    gfx->fillTriangle(tx + 5, 429, tx, 434, tx + 3, 434, bolt);
+    gfx->fillTriangle(tx + 2, 433, tx + 6, 433, tx + 1, 438, bolt);
+    tx += 9;
+  }
+  gfx->setTextColor(gNight ? UI_INK_NIGHT : UI_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(tx, 430);
+  gfx->print(t);
 }
 
 void drawBars() {

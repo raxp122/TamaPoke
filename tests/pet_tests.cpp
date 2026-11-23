@@ -346,12 +346,36 @@ static void testDailyGoalsProgressAndReset() {
   pet.applyCatchResult(3);
   EXPECT_EQ(pet.dailyGoalProgress[2], 5);
   EXPECT_TRUE(pet.dailyGoalComplete(2));
+  EXPECT_EQ(pet.candies, 1);  // all three goals of the day: one candy
 
   pet.setClock(2 * 86400);
   pet.ensureDailyGoals();
   EXPECT_EQ(pet.dailyGoalDay, 2U);
   EXPECT_EQ(pet.dailyGoalDone, 0);
   EXPECT_EQ(pet.dailyGoalProgress[0], 0);
+}
+
+static void testCandyForgivesSlipUpOrRaisesBond() {
+  Pet pet = hatchedPet(4);
+  EXPECT_EQ(pet.useCandy(), 0);  // no candy yet
+  pet.candies = 2;
+  pet.careMistakes = 1;
+  pet.bond = 5;
+  EXPECT_EQ(pet.useCandy(), 1);
+  EXPECT_EQ(pet.careMistakes, 0);
+  EXPECT_EQ(pet.candies, 1);
+  EXPECT_EQ(pet.useCandy(), 2);
+  EXPECT_TRUE(pet.bond >= 15);
+  EXPECT_EQ(pet.candies, 0);
+}
+
+static void testFrameIsAutomaticUnlessChosen() {
+  Pet pet = hatchedPet(4);
+  EXPECT_TRUE(pet.frameAuto);
+  EXPECT_EQ(pet.displayFrame(), pet.unlockedCollectionFrameCount() - 1);
+  pet.collectionFrame = 0;
+  pet.setFrameAuto(false);
+  EXPECT_EQ(pet.displayFrame(), 0);
 }
 
 static void testDailyBattleGoalCompletesOnWinOnly() {
@@ -1247,6 +1271,8 @@ int main() {
   testPersonalityIsDerivedWithoutMutating();
   testDailyGoalsProgressAndReset();
   testDailyBattleGoalCompletesOnWinOnly();
+  testCandyForgivesSlipUpOrRaisesBond();
+  testFrameIsAutomaticUnlessChosen();
   testCaughtDexIsSeparateFromRaisedDex();
   testCaughtPokemonAdvanceDailyCatchGoal();
   testDexRewardsApplyOnceAndCap();

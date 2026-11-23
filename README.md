@@ -46,8 +46,8 @@ installs it from **Settings › UPDATE**. See [Wi-Fi and updates](#wi-fi-and-upd
 
 The main screen shows the four needs as arcs along the edge (**FOOD** and
 **ENE** on the left, **JOY** and **HYG** on the right, each with the icon of its
-button), the four action buttons along the bottom curve and the steps, day
-streak and battery at the top. While the Pokémon sleeps the screen dims only on
+button), the four action buttons along the bottom curve, the battery as a thin
+arc under them and the steps and day streak at the top. While the Pokémon sleeps the screen dims only on
 the main screen.
 
 **Pokédex**: two buttons cycle the region (all, Kanto, Johto, Hoenn) and the
@@ -62,7 +62,8 @@ Swipe down for a menu of big buttons:
 - **Time**: manual clock, **time zone** and **summer time** (auto, always on,
   always off). With a time zone set, the clock is synced from the internet at
   start-up and every hour.
-- **Sound & screen**: sound level, power saving, language (6 languages).
+- **Sound & screen**: sound level, power saving, language (6 languages) and the
+  profile frame (automatic or chosen).
 - **Wi-Fi**: saved networks and automatic update check.
 - **Update**: installed and available version, check and install.
 - **GPS** (`-G` board only): status, coordinates, altitude, satellites and UTC
@@ -101,9 +102,10 @@ An update must never force a reinstall over USB:
 - region and starter selection on a new save
 - evolution with branching, day/night, bond and stat conditions; it needs the
   species' level and at least three of the four needs above 40
-- wild battles, catching, training, daily goals and six minigames: Ball, Catch
+- wild battles, catching, training, daily goals (all three in a day give a
+  candy that forgives a slip-up) and six minigames: Ball, Catch
   (avoid the traps), Memo, Clean (rub the stains), Type (type chart quiz) and
-  Tilt (roll a Poké Ball by tilting the board)
+  Tilt (roll a Poké Ball by tilting the board; tap to set the level position)
 - expeditions with an item inventory, Hoenn tour sites and walking goals
 - profile, personality, medals, collector ranks and cosmetic frames
 - step counter with daily rewards (500 / 2,000 / 5,000 steps) and lifetime trail

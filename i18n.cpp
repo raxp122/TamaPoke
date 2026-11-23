@@ -80,6 +80,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Atento...",
     "Frota las manchas!", "Evita las trampas!",
     "INCLINA", "INCLINA!", "Inclina la placa",
+    "Nivel fijado", "Toca: fija el nivel", "Su favorita!", "Descuido perdonado!", "Vinculo +10!", "Caramelo ganado!", "3 metas = caramelo (x%u)", "Marco: auto", "Marco: %u/%u",
   },
   // ---------------- EN ----------------
   {
@@ -153,6 +154,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Get ready...",
     "Rub the stains!", "Avoid the traps!",
     "TILT", "TILT!", "Tilt the board",
+    "Level set", "Tap: set level here", "Favourite!", "Slip-up forgiven!", "Bond +10!", "Candy earned!", "3 goals = candy (x%u)", "Frame: auto", "Frame: %u/%u",
   },
   // ---------------- FR ----------------
   {
@@ -226,6 +228,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Attention...",
     "Frotte les taches!", "Evite les pieges!",
     "PENCHE", "PENCHE!", "Penche la carte",
+    "Niveau regle", "Touche: regle le niveau", "Sa preferee!", "Erreur pardonnee!", "Lien +10!", "Bonbon gagne!", "3 buts = bonbon (x%u)", "Cadre: auto", "Cadre: %u/%u",
   },
   // ---------------- DE ----------------
   {
@@ -299,6 +302,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Achtung...",
     "Flecken wegreiben!", "Fallen meiden!",
     "KIPPEN", "KIPPEN!", "Platine kippen",
+    "Waage gesetzt", "Tippen: Waage setzen", "Lieblingsbeere!", "Patzer vergeben!", "Bond +10!", "Bonbon verdient!", "3 Ziele = Bonbon (x%u)", "Rahmen: auto", "Rahmen: %u/%u",
   },
   // ---------------- IT ----------------
   {
@@ -372,6 +376,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Pronti...",
     "Strofina le macchie!", "Evita le trappole!",
     "INCLINA", "INCLINA!", "Inclina la scheda",
+    "Livello impostato", "Tocca: imposta il livello", "La sua preferita!", "Svista perdonata!", "Legame +10!", "Caramella vinta!", "3 obiettivi = caramella (x%u)", "Cornice: auto", "Cornice: %u/%u",
   },
   // ---------------- PT ----------------
   {
@@ -445,6 +450,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Atencao...",
     "Esfregue as manchas!", "Evite as armadilhas!",
     "INCLINA", "INCLINA!", "Incline a placa",
+    "Nivel definido", "Toque: define o nivel", "A favorita!", "Descuido perdoado!", "Vinculo +10!", "Doce ganho!", "3 metas = doce (x%u)", "Moldura: auto", "Moldura: %u/%u",
   },
 };
 
