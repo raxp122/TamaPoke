@@ -84,6 +84,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Gira el dedo, toca el centro",
     "Shh... duerme", "Mareado! Espera", "Basta por hoy",
     "Sin sueno (19-9)", "Durmio poco!", "Buenos dias!", "POCION", "CARAMELO", "Energia +30!",
+    "ZONA HORARIA", "Gira el dedo: cambia. Arriba/abajo: otra",
   },
   // ---------------- EN ----------------
   {
@@ -161,6 +162,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Turn your finger, tap the centre",
     "Shh... sleeping", "Dizzy! Wait a bit", "Enough for today",
     "Not sleepy (19-9)", "Slept too little!", "Good morning!", "POTION", "CANDY", "Energy +30!",
+    "TIME ZONE", "Turn your finger: change. Up/down: next",
   },
   // ---------------- FR ----------------
   {
@@ -238,6 +240,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Tourne le doigt, touche le centre",
     "Chut... il dort", "Etourdi! Attends", "Assez aujourd'hui",
     "Pas sommeil 19-9", "Trop peu dormi!", "Bonjour!", "POTION", "BONBON", "Energie +30!",
+    "FUSEAU", "Tourne le doigt: change. Haut/bas: autre",
   },
   // ---------------- DE ----------------
   {
@@ -315,6 +318,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Finger drehen, Mitte tippen",
     "Psst... schlaeft", "Schwindlig! Warte", "Genug fuer heute",
     "Nicht mued (19-9)", "Zu wenig Schlaf!", "Guten Morgen!", "TRANK", "BONBON", "Energie +30!",
+    "ZEITZONE", "Finger drehen: aendern. Hoch/runter: weiter",
   },
   // ---------------- IT ----------------
   {
@@ -392,6 +396,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Gira il dito, tocca il centro",
     "Shh... dorme", "Stordito! Aspetta", "Basta per oggi",
     "Non ha sonno 19-9", "Ha dormito poco!", "Buongiorno!", "POZIONE", "CARAMELLA", "Energia +30!",
+    "FUSO ORARIO", "Gira il dito: cambia. Su/giu: altra voce",
   },
   // ---------------- PT ----------------
   {
@@ -469,6 +474,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Gire o dedo, toque no centro",
     "Shh... dormindo", "Tonto! Espere", "Chega por hoje",
     "Sem sono (19-9)", "Dormiu pouco!", "Bom dia!", "POCAO", "BALA", "Energia +30!",
+    "FUSO HORARIO", "Gire o dedo: muda. Cima/baixo: outro",
   },
 };
 

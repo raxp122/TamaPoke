@@ -74,7 +74,9 @@ or tap an item on the ring) to choose, tap the centre to open:
 
 - **Time**: manual clock, **time zone** and **summer time** (auto, always on,
   always off). With a time zone set, the clock is synced from the internet at
-  start-up and every hour.
+  start-up and every hour. Time and Sound & screen are dial pages: one setting
+  at a time, turn your finger around the edge (or tap − / +) to change it,
+  swipe up/down for the next one; PWR goes back and applies a manual clock.
 - **Sound & screen**: sound level, power saving, language (6 languages) and the
   profile frame (automatic or chosen).
 - **Wi-Fi**: saved networks and automatic update check.

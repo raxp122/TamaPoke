@@ -6,6 +6,15 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Settings pages with a dial**: Time and Sound & screen no longer use
+  rectangular buttons. Each page shows one setting at a time: its name at the
+  top (dots show how many there are), the value big in the centre and a ring
+  along the edge. Turn your finger around the screen to change the value, or
+  use the round − / + buttons; swipe up/down (or tap the name) for the next
+  setting. A manual clock change is applied when you leave the page with PWR.
+
+## 1.37.75 — Food wheel, sleep at night
+
 - **Food wheel**: the food button opens a wheel like the settings one with
   **Razz, Oran and Lum Berry**, a **Potion** and the candy (when you have one),
   with new pixel-art icons. A berry gives +25 FOOD; the favourite one +40 and no

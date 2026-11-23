@@ -135,6 +135,9 @@ uint8_t setPage = SETP_MENU;
 uint8_t setSel = 0;            // voz elegida en la rueda de ajustes
 bool setRotating = false;      // la rueda gira con el dedo
 int clockH = 12, clockM = 0;  // hora en edicion
+bool clockEdited = false;      // la hora manual cambio: se aplica al salir de la pagina
+uint8_t dialField = 0;         // voz elegida en una pagina de ghiera (hora, sonido)
+bool dialRotating = false;     // el dedo gira la ghiera
 bool powerSave = false;       // ahorro opcional: off por defecto
 bool helpOpen = false;
 // Wi-Fi y actualizaciones: capa sobre los ajustes (clockOpen sigue en true)
@@ -568,7 +571,7 @@ uint16_t renderIntervalMs() {
   if (gameOpen && gameMode == 0) return 40;  // BALL: la fisica sigue el tiempo real, la imagen fluida
   if (gameOpen && gameMode == 3) return 60;  // LIMPIA: respuesta rapida al frotar
   if (gameOpen || sackOpen) return 115;
-  if (galleryRotating || setRotating || foodRotating) return 40;  // carrusel/rueda: animacion fluida mientras gira el dedo
+  if (galleryRotating || setRotating || foodRotating || dialRotating) return 40;  // carrusel/rueda: animacion fluida mientras gira el dedo
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
   if (!powerSave) return 100;
   if (dimStage >= 2) return 650;
@@ -1195,6 +1198,7 @@ void handleTouch() {
     tYl = y;
     if (!swallowGesture && galleryOpen && galleryDetail) galleryRotateDrag(x, y);
     if (!swallowGesture && clockOpen && !netOpen && setPage == SETP_MENU) settingsWheelDrag(x, y);
+    if (!swallowGesture && clockOpen && !netOpen && (setPage == SETP_TIME || setPage == SETP_SOUND)) dialDrag(x, y);
     if (!swallowGesture && feedMenuUntil && !clockOpen && !cardOpen && !galleryOpen && !gameOpen) foodWheelDrag(x, y);
     if (!swallowGesture && gameOpen && gameMode == 3) cleanRub(x, y);
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
@@ -1214,6 +1218,8 @@ void handleTouch() {
       settingsWheelEnd();  // la rueda de ajustes consume el gesto
     } else if (foodRotating) {
       foodWheelEnd();
+    } else if (dialRotating) {
+      dialEnd();
     } else if (!holdFired && !swallowGesture) {
       switch (classifyGesture(dx, dy, dt)) {
         case G_SWIPE_RIGHT: onSwipe(1); break;
@@ -1262,7 +1268,12 @@ bool goBack() {
   }
   if (clockOpen) {
     setRotating = false;
-    if (setPage != SETP_MENU) { setPage = SETP_MENU; clockDirty = true; }
+    dialRotating = false;
+    if (setPage != SETP_MENU) {
+      if (setPage == SETP_TIME && clockEdited) { clockEdited = false; applyClock(); sfxPlay(SFX_MENU); }  // la hora manual se aplica al salir
+      setPage = SETP_MENU;
+      clockDirty = true;
+    }
     else { clockOpen = false; markUiDirty(); }
     lockTouchBrief();
     return true;
@@ -1319,6 +1330,7 @@ void onSwipeV(int dir) {
   if (gameMenuOpen) return;
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
   if (clockOpen && !netOpen && setPage == SETP_MENU) { settingsWheelStep(dir > 0 ? -1 : 1); return; }  // rueda: un paso
+  if (clockOpen && !netOpen && (setPage == SETP_TIME || setPage == SETP_SOUND)) { dialFieldStep(dir > 0 ? -1 : 1); return; }
   if (feedMenuUntil && !clockOpen && !cardOpen) { foodWheelStep(dir > 0 ? -1 : 1); return; }
   if (clockOpen || cardOpen) return;  // se sale con PWR
   if (dir > 0) {                    // deslizar abajo: ajustar hora
@@ -4487,61 +4499,250 @@ void settingsWheelEnd() {
   clockDirty = true;
 }
 
-// pagina Ora: hora manual, fuso orario y hora legal (la hora de internet usa los dos)
-#define TIME_TZ_Y 204
-#define TIME_DST_Y 254
-#define TIME_OK_Y 318
-static void renderSettingsTime() {
-  setTitle(T(S_SET_TIME), 2, 30);
-  char t[8];
-  snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(6);
-  gfx->setCursor(CX - 90, 54);
-  gfx->print(t);
-  drawClockBtn(104, 116, "-");  // hora -
-  drawClockBtn(170, 116, "+");  // hora +
-  drawClockBtn(252, 116, "-");  // min -
-  drawClockBtn(318, 116, "+");  // min +
-  gfx->setTextSize(1);
+// ---- paginas de ghiera: nombre de la voz arriba, valor grande en el centro, un
+// anillo en el borde que se gira con el dedo, "-" / "+" redondos a los lados ----
+#define DIAL_RING_R 212
+#define DIAL_BTN_R 30
+#define DIAL_BTN_DX 150
+#define DIAL_BTN_Y (CY + 62)
+#define DIAL_STEP 0.42f  // ~24 grados por paso
+static const char *const LANG_NAMES[LANG_COUNT] = { "ESPANOL", "ENGLISH", "FRANCAIS", "DEUTSCH", "ITALIANO", "PORTUGUES" };
+
+static bool dialPage() { return setPage == SETP_TIME || setPage == SETP_SOUND; }
+static uint8_t dialFieldCount() { return dialPage() ? 4 : 0; }
+
+static int dialCount(uint8_t f) {
+  if (setPage == SETP_TIME) return f == 0 ? 24 : f == 1 ? 60 : f == 2 ? (int)TZ_COUNT : (int)DSTM_COUNT;
+  return f == 0 ? 4 : f == 1 ? 2 : f == 2 ? (int)LANG_COUNT : (int)pet.unlockedCollectionFrameCount() + 1;
+}
+
+static bool dialEnabled(uint8_t f) {
+  return !(setPage == SETP_TIME && f == 3 && netTimeZone() == TZ_OFF);  // hora legal: solo con zona
+}
+
+static int dialGet(uint8_t f) {
+  if (setPage == SETP_TIME) return f == 0 ? clockH : f == 1 ? clockM : f == 2 ? netTimeZone() : netDstMode();
+  switch (f) {
+    case 0: return audioMode();  // OFF, LOW, MED, FULL
+    case 1: return powerSave ? 1 : 0;
+    case 2: return gLang;
+    default: return pet.frameAuto ? 0 : pet.collectionFrame + 1;
+  }
+}
+
+static void dialSet(uint8_t f, int v) {
+  if (setPage == SETP_TIME) {
+    switch (f) {
+      case 0: clockH = v; clockEdited = true; break;
+      case 1: clockM = v; clockEdited = true; break;
+      case 2: netSetTimeZone((uint8_t)v); break;
+      default: netSetDstMode((uint8_t)v); break;
+    }
+    return;
+  }
+  switch (f) {
+    case 0: audioSetMode((uint8_t)v); break;
+    case 1: setPowerSave(v != 0); break;
+    case 2: setLang((Lang)v); break;
+    default:
+      if (v == 0) pet.setFrameAuto(true);
+      else { pet.setFrameAuto(false); pet.setCollectionFrame((uint8_t)(v - 1)); }
+      break;
+  }
+}
+
+// "SUONO: MEDIO" -> nombre "SUONO", valor "MEDIO"
+static void splitLabel(const char *s, char *name, size_t nn, char *val, size_t vn) {
+  const char *c = strchr(s, ':');
+  if (!c) { snprintf(name, nn, "%s", s); val[0] = 0; return; }
+  snprintf(name, nn, "%.*s", (int)(c - s), s);
+  c++;
+  while (*c == ' ') c++;
+  snprintf(val, vn, "%s", c);
+}
+
+static void dialTexts(uint8_t f, char *name, size_t nn, char *val, size_t vn) {
+  if (setPage == SETP_TIME) {
+    switch (f) {
+      case 0: snprintf(name, nn, "%s", T(S_HOUR)); snprintf(val, vn, "%02d:%02d", clockH, clockM); return;
+      case 1: snprintf(name, nn, "%s", T(S_MIN)); snprintf(val, vn, "%02d:%02d", clockH, clockM); return;
+      case 2: {
+        uint8_t tz = netTimeZone();
+        snprintf(name, nn, "%s", T(S_TZ_FIELD));
+        snprintf(val, vn, "%s", tz == TZ_OFF ? T(S_TZ_MANUAL) : TZ_ZONES[tz].label);
+        return;
+      }
+      default: {
+        uint8_t dm = netDstMode();
+        splitLabel(dm == DSTM_ON ? T(S_DST_ON) : dm == DSTM_OFF ? T(S_DST_OFF) : T(S_DST_AUTO), name, nn, val, vn);
+        return;
+      }
+    }
+  }
+  switch (f) {
+    case 0: splitLabel(soundModeLabel(), name, nn, val, vn); return;
+    case 1: splitLabel(powerSaveLabel(), name, nn, val, vn); return;
+    case 2: snprintf(name, nn, "%s", T(S_LANG_LABEL)); snprintf(val, vn, "%s", LANG_NAMES[gLang]); return;
+    default: {
+      char tmp[32];
+      if (pet.frameAuto) snprintf(tmp, sizeof(tmp), "%s", T(S_FRAME_AUTO));
+      else snprintf(tmp, sizeof(tmp), T(S_FRAME_SET_FMT), pet.collectionFrame + 1, pet.unlockedCollectionFrameCount());
+      splitLabel(tmp, name, nn, val, vn);
+      return;
+    }
+  }
+}
+
+static void upcase(char *s) { for (; *s; s++) if (*s >= 'a' && *s <= 'z') *s -= 32; }
+
+static void renderDialPage() {
+  uint8_t nf = dialFieldCount();
+  if (dialField >= nf) dialField = 0;
+  bool on = dialEnabled(dialField);
+  uint16_t accent = setPage == SETP_TIME ? 0x4C98 : 0xF3B7;
+  // titulo de la pagina
+  const char *title = setPage == SETP_TIME ? T(S_SET_TIME) : T(S_SET_SOUNDSCREEN);
   gfx->setTextColor(NET_DIM_INK);
-  gfx->setCursor(121, 184);
-  gfx->print(T(S_HOUR));
-  gfx->setCursor(275, 184);
-  gfx->print(T(S_MIN));
-  uint8_t tz = netTimeZone();
-  char tzl[32];
-  snprintf(tzl, sizeof(tzl), "<  %s  >", tz == TZ_OFF ? T(S_TZ_MANUAL) : TZ_ZONES[tz].label);
-  setButton(66, TIME_TZ_Y, 334, 44, tzl, UI_WHITE, UI_INK, 2);
-  uint8_t dm = netDstMode();
-  const char *dl = dm == DSTM_ON ? T(S_DST_ON) : dm == DSTM_OFF ? T(S_DST_OFF) : T(S_DST_AUTO);
-  setButton(66, TIME_DST_Y, 334, 44, dl, tz == TZ_OFF ? UI_BG_DAY : UI_WHITE, tz == TZ_OFF ? UI_TRACK : UI_INK, 2);
-  // con la hora de internet activa, el ajuste manual se corrige en la siguiente sincronizacion
-  if (tz != TZ_OFF) {
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(title) * 3, 44);
+  gfx->print(title);
+  // voz elegida y puntos de pagina
+  char name[24], val[32];
+  dialTexts(dialField, name, sizeof(name), val, sizeof(val));
+  upcase(name);
+  gfx->setTextColor(accent);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(name) * 6, 84);
+  gfx->print(name);
+  for (uint8_t i = 0; i < nf; i++) {
+    int dx = CX + (i * 2 - (nf - 1)) * 9;
+    if (i == dialField) gfx->fillCircle(dx, 112, 4, accent);
+    else gfx->drawCircle(dx, 112, 4, UI_TRACK);
+  }
+  // anillo del borde: posicion del valor
+  int n = dialCount(dialField), v = dialGet(dialField);
+  arcDots(CX, CY, DIAL_RING_R, 0, (float)(2 * PI), 1, UI_TRACK);
+  if (n <= 12)
+    for (int i = 0; i < n; i++) {
+      float a = -(float)PI / 2 + i * (float)(2 * PI) / n;
+      gfx->fillCircle(CX + (int)lroundf(DIAL_RING_R * cosf(a)), CY + (int)lroundf(DIAL_RING_R * sinf(a)), 3, NET_DIM_INK);
+    }
+  float a = -(float)PI / 2 + v * (float)(2 * PI) / (n ? n : 1);
+  int hx = CX + (int)lroundf(DIAL_RING_R * cosf(a)), hy = CY + (int)lroundf(DIAL_RING_R * sinf(a));
+  gfx->fillCircle(hx, hy, 11, on ? accent : UI_TRACK);
+  gfx->drawCircle(hx, hy, 11, UI_INK);
+  // valor
+  uint16_t vc = on ? UI_INK : UI_TRACK;
+  if (setPage == SETP_TIME && dialField <= 1) {  // reloj grande, la parte elegida en color
+    char hh[4], mm[4];
+    snprintf(hh, sizeof(hh), "%02d", clockH);
+    snprintf(mm, sizeof(mm), "%02d", clockM);
+    gfx->setTextSize(6);
+    int x0 = CX - 90, y0 = CY - 34;
+    gfx->setTextColor(dialField == 0 ? accent : UI_INK);
+    gfx->setCursor(x0, y0);
+    gfx->print(hh);
+    gfx->setTextColor(UI_INK);
+    gfx->print(":");
+    gfx->setTextColor(dialField == 1 ? accent : UI_INK);
+    gfx->print(mm);
+  } else {
+    char l1[32], l2[32];
+    snprintf(l1, sizeof(l1), "%s", val);
+    upcase(l1);
+    l2[0] = 0;
+    int size = (int)strlen(l1) * 18 <= 300 ? 3 : 2;
+    if ((int)strlen(l1) * 6 * size > 300) {  // dos lineas cortando en un espacio
+      char *sp = strrchr(l1, ' ');
+      if (sp) { *sp = 0; snprintf(l2, sizeof(l2), "%s", sp + 1); }
+    }
+    gfx->setTextColor(vc);
+    gfx->setTextSize(size);
+    int ly = l2[0] ? CY - 30 : CY - 14;
+    gfx->setCursor(CX - (int)strlen(l1) * 3 * size, ly);
+    gfx->print(l1);
+    if (l2[0]) {
+      gfx->setCursor(CX - (int)strlen(l2) * 3 * size, ly + 10 * size);
+      gfx->print(l2);
+    }
+  }
+  // "-" y "+"
+  for (int side = -1; side <= 1; side += 2) {
+    int bx = CX + side * DIAL_BTN_DX;
+    gfx->fillCircle(bx, DIAL_BTN_Y, DIAL_BTN_R, on ? UI_WHITE : UI_BG_DAY);
+    gfx->drawCircle(bx, DIAL_BTN_Y, DIAL_BTN_R, on ? UI_INK : UI_TRACK);
+    gfx->setTextColor(on ? UI_INK : UI_TRACK);
+    gfx->setTextSize(3);
+    gfx->setCursor(bx - 8, DIAL_BTN_Y - 11);
+    gfx->print(side < 0 ? "-" : "+");
+  }
+  // pagina Ora: estado de la hora de internet
+  if (setPage == SETP_TIME && netTimeZone() != TZ_OFF) {
     char sl[48];
     uint32_t ls = netLastTimeSync();
     if (ls) snprintf(sl, sizeof(sl), T(S_TZ_SYNCED_FMT), (unsigned)((ls / 3600) % 24), (unsigned)((ls / 60) % 60));
     else snprintf(sl, sizeof(sl), "%s", T(S_TZ_WAIT));
-    gfx->setTextSize(1);
     gfx->setTextColor(NET_DIM_INK);
-    gfx->setCursor(CX - (int)strlen(sl) * 3, 304);
+    gfx->setTextSize(1);
+    gfx->setCursor(CX - (int)strlen(sl) * 3, CY + 112);
     gfx->print(sl);
   }
-  setButton(133, TIME_OK_Y, 200, 52, T(S_OK), UI_BAR_OK, UI_BG_DAY, 3);
+  const char *hint = T(S_DIAL_HINT);
+  gfx->setTextColor(NET_DIM_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(hint) * 3, CY + 130);
+  gfx->print(hint);
 }
 
-static void renderSettingsSound() {
-  setTitle(T(S_SET_SOUNDSCREEN), 2, 44);
-  uint8_t snd = audioMode();
-  setButton(SET_BIG_X, 100, SET_BIG_W, SET_BIG_H, soundModeLabel(), snd ? UI_BAR_OK : UI_WHITE, snd ? UI_BG_DAY : UI_INK, 2);
-  setButton(SET_BIG_X, 172, SET_BIG_W, SET_BIG_H, powerSaveLabel(), powerSave ? UI_BAR_WARN : UI_WHITE, UI_INK, 2);
-  char lp[32];
-  snprintf(lp, sizeof(lp), "%s: %s  >", T(S_LANG_LABEL), LANG_CODES[gLang]);
-  setButton(SET_BIG_X, 244, SET_BIG_W, SET_BIG_H, lp, UI_WHITE, UI_INK, 2);
-  char fl[32];
-  if (pet.frameAuto) snprintf(fl, sizeof(fl), "%s  >", T(S_FRAME_AUTO));
-  else { snprintf(fl, sizeof(fl), T(S_FRAME_SET_FMT), pet.collectionFrame + 1, pet.unlockedCollectionFrameCount()); strncat(fl, "  >", sizeof(fl) - strlen(fl) - 1); }
-  setButton(SET_BIG_X, 316, SET_BIG_W, SET_BIG_H, fl, UI_WHITE, UI_INK, 2);
+static void dialAdjust(int dir) {
+  if (!dialEnabled(dialField)) return;
+  int n = dialCount(dialField);
+  if (n <= 0) return;
+  dialSet(dialField, (dialGet(dialField) + n + dir) % n);
+  clockDirty = true;
+  if (setPage == SETP_SOUND && dialField == 0 && audioEnabled()) sfxPlay(SFX_LEVEL);
+  else sfxPlay(SFX_TAP);
+}
+
+void dialFieldStep(int dir) {
+  uint8_t nf = dialFieldCount();
+  if (!nf) return;
+  dialField = (dialField + nf + dir) % nf;
+  clockDirty = true;
+  sfxPlay(SFX_MENU);
+}
+
+// girar el dedo por el borde: sentido horario = valor siguiente
+void dialDrag(int16_t x, int16_t y) {
+  float dx = x - CX, dy = y - CY;
+  if (dx * dx + dy * dy < 60.0f * 60.0f) { galRotHasAngle = false; return; }
+  float a = atan2f(dy, dx);
+  if (!galRotHasAngle) { galRotLastAngle = a; galRotHasAngle = true; return; }
+  float d = a - galRotLastAngle;
+  if (d > (float)PI) d -= 2 * (float)PI;
+  if (d < -(float)PI) d += 2 * (float)PI;
+  galRotLastAngle = a;
+  galRotAccum += d;
+  if (!dialRotating) {
+    if (fabsf(galRotAccum) < GAL_ROT_START) return;
+    dialRotating = true;
+    galRotAccum = 0;
+  }
+  while (galRotAccum >= DIAL_STEP) { galRotAccum -= DIAL_STEP; dialAdjust(1); }
+  while (galRotAccum <= -DIAL_STEP) { galRotAccum += DIAL_STEP; dialAdjust(-1); }
+}
+
+void dialEnd() {
+  dialRotating = false;
+  galRotAccum = 0;
+}
+
+static void dialTap(int16_t x, int16_t y) {
+  for (int side = -1; side <= 1; side += 2) {
+    int dx = x - (CX + side * DIAL_BTN_DX), dy = y - DIAL_BTN_Y;
+    if (dx * dx + dy * dy <= (DIAL_BTN_R + 10) * (DIAL_BTN_R + 10)) { dialAdjust(side); return; }
+  }
+  if (y < 128 && y > 60) dialFieldStep(1);  // nombre de la voz: la siguiente
 }
 
 static void renderSettingsInfo() {
@@ -4608,8 +4809,8 @@ void renderClock() {
   clockDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   switch (setPage) {
-    case SETP_TIME: renderSettingsTime(); break;
-    case SETP_SOUND: renderSettingsSound(); break;
+    case SETP_TIME:
+    case SETP_SOUND: renderDialPage(); break;
     case SETP_INFO: renderSettingsInfo(); break;
     case SETP_GPS: renderSettingsGps(); break;
     default: renderSettingsMenu(); break;
@@ -4622,7 +4823,10 @@ static void openSettingsPage(uint8_t page) {
     uint32_t e = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
     clockH = (e / 3600) % 24;
     clockM = (e / 60) % 60;
+    clockEdited = false;
   }
+  dialField = 0;
+  dialRotating = false;
   setPage = page;
   clockDirty = true;
   lockTouchBrief();
@@ -4658,54 +4862,8 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
     case SETP_TIME:
-      if (y >= TIME_TZ_Y && y < TIME_TZ_Y + 44 && x >= 66 && x < 400) {  // fuso: izquierda/derecha
-        uint8_t tz = netTimeZone();
-        netSetTimeZone(x < CX ? (tz + TZ_COUNT - 1) % TZ_COUNT : (tz + 1) % TZ_COUNT);
-        clockDirty = true;
-        sfxPlay(SFX_TAP);
-        return;
-      }
-      if (y >= TIME_DST_Y && y < TIME_DST_Y + 44 && x >= 66 && x < 400 && netTimeZone() != TZ_OFF) {
-        netSetDstMode((netDstMode() + 1) % DSTM_COUNT);
-        clockDirty = true;
-        sfxPlay(SFX_TAP);
-        return;
-      }
-      if (y >= 116 && y <= 174) {  // fila de botones +/-
-        if (x >= 104 && x < 162) clockH = (clockH + 23) % 24;
-        else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
-        else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
-        else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
-        else return;
-        clockDirty = true;
-        sfxPlay(SFX_TAP);
-        return;
-      }
-      if (x >= 133 && x < 333 && y >= TIME_OK_Y && y < TIME_OK_Y + 52) { applyClock(); sfxPlay(SFX_MENU); }
-      return;
     case SETP_SOUND:
-      if (x < SET_BIG_X || x >= SET_BIG_X + SET_BIG_W) return;
-      if (y >= 100 && y < 100 + SET_BIG_H) {
-        audioSetMode(nextSoundMode());
-        clockDirty = true;
-        if (audioEnabled()) sfxPlay(SFX_LEVEL);  // confirma el nuevo modo si no esta apagado
-      } else if (y >= 172 && y < 172 + SET_BIG_H) {
-        setPowerSave(!powerSave);
-        clockDirty = true;
-        sfxPlay(powerSave ? SFX_MENU : SFX_TAP);
-      } else if (y >= 244 && y < 244 + SET_BIG_H) {
-        setLang((Lang)((gLang + 1) % LANG_COUNT));
-        clockDirty = true;
-        sfxPlay(SFX_TAP);
-      } else if (y >= 316 && y < 316 + SET_BIG_H) {
-        // cornice: AUTO -> 1 -> 2 ... -> ultima -> AUTO
-        uint8_t n = pet.unlockedCollectionFrameCount();
-        if (pet.frameAuto) { pet.setCollectionFrame(0); pet.setFrameAuto(false); }
-        else if (pet.collectionFrame + 1 < n) pet.setCollectionFrame(pet.collectionFrame + 1);
-        else pet.setFrameAuto(true);
-        clockDirty = true;
-        sfxPlay(SFX_TAP);
-      }
+      dialTap(x, y);
       return;
     default:
       return;
