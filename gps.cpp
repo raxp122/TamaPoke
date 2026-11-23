@@ -8,7 +8,6 @@
 #define GPS_POLL_MS 1000
 #define GPS_STEP_MS 100         // the module needs a moment between request and read
 #define GPS_MAX_READ 2000       // matches Wire.setBufferSize() in setup()
-#define GPS_BOOT_WINDOW_MS (5UL * 60UL * 1000UL)
 
 static bool present = false;
 static bool fastBus = true;     // 400 kHz during GNSS transfers, 100 kHz if the module does not cope
@@ -17,11 +16,11 @@ static uint8_t step = 0;
 static uint32_t t0 = 0, pending = 0, gen = 0;
 static uint32_t lastLog = 0;
 static bool loggedFix = false;
+static bool running = false;    // GNSS out of reset (only while the GPS page is open)
 
 bool gpsPresent() { return present; }
 const GpsInfo &gpsInfo() { return parser.info(); }
 uint32_t gpsGen() { return gen; }
-bool gpsBootWindow(uint32_t now) { return present && !loggedFix && now < GPS_BOOT_WINDOW_MS; }
 
 static bool tcaRead(uint8_t reg, uint8_t *v) {
   Wire.beginTransmission(TCA9554_ADDR);
@@ -39,17 +38,27 @@ static bool tcaWrite(uint8_t reg, uint8_t v) {
   return Wire.endTransmission() == 0;
 }
 
-void gpsBegin() {
-  // TCA9554: only the GNSS reset becomes an output (high); every other pin keeps its state
+// TCA9554: only the GNSS reset is an output; every other pin keeps its state
+static void gpsRun(bool on) {
   uint8_t out, cfg;
-  if (tcaRead(0x01, &out) && tcaRead(0x03, &cfg)) {
-    tcaWrite(0x01, out | (1 << TCA_EXIO_GPS_RST));
-    tcaWrite(0x03, cfg & ~(1 << TCA_EXIO_GPS_RST));
+  if (!tcaRead(0x01, &out) || !tcaRead(0x03, &cfg)) return;
+  out = on ? (out | (1 << TCA_EXIO_GPS_RST)) : (out & ~(1 << TCA_EXIO_GPS_RST));
+  tcaWrite(0x01, out);
+  tcaWrite(0x03, cfg & ~(1 << TCA_EXIO_GPS_RST));
+  running = on;
+}
+
+void gpsBegin() {
+  // briefly out of reset to see whether the module exists, then held in reset
+  // (it only runs while the GPS page is open)
+  gpsRun(true);
+  for (int i = 0; i < 6 && !present; i++) {
+    delay(50);
+    Wire.beginTransmission(GPS_ADDR_W);
+    present = Wire.endTransmission() == 0;
   }
-  delay(20);
-  Wire.beginTransmission(GPS_ADDR_W);
-  present = Wire.endTransmission() == 0;
-  Serial.printf("GPS %s\n", present ? "LC76G found" : "not present");
+  gpsRun(false);
+  Serial.printf("GPS %s\n", present ? "LC76G found (off until the GPS page opens)" : "not present");
 }
 
 static bool writeCmd(const uint8_t *data, size_t n) {
@@ -71,7 +80,14 @@ static void logState(uint32_t now) {
 
 void gpsPoll(uint32_t now, bool wanted) {
   if (!present) return;
-  if (!wanted) { step = 0; return; }
+  if (wanted != running) {  // the GPS page opened or closed: switch the module on/off
+    gpsRun(wanted);
+    step = 0;
+    t0 = now;  // first read after a second: the module needs a moment after reset
+    if (wanted) { loggedFix = false; lastLog = now; Serial.println("GPS on"); }
+    else Serial.println("GPS off");
+  }
+  if (!wanted) return;
   switch (step) {
     case 0: {  // ask how many bytes are waiting
       if (now - t0 < GPS_POLL_MS) return;

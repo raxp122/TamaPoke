@@ -7,9 +7,10 @@ Build numbers are not consecutive: they count every CI run.
 ## Next
 
 - **GPS** (`-G` board): Settings › GPS shows the status, latitude/longitude,
-  altitude, satellites and UTC time of the LC76G module; for the first five
-  minutes after start-up the position is also written to the serial log.
-  Boards without the module show "No GPS module".
+  altitude, satellites and UTC time of the LC76G module, which runs only while
+  that page is open (held in reset otherwise; the first fix can take a minute).
+  The position is also written to the serial log. Boards without the module
+  show "No GPS module".
 
 ## Unreleased number (merged before GPS)
 

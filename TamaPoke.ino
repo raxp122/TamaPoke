@@ -464,7 +464,7 @@ void setup() {
   rtcBegin();
   batBegin();
   pwrSetup();
-  gpsBegin();  // solo placa -G: libera el reset del GNSS y comprueba que responde
+  gpsBegin();  // solo placa -G: comprueba el GNSS y lo deja apagado (reset)
   uint32_t e = rtcEpoch();
   if (e == 0) {
     rtcSetEpoch(1767225600UL);  // RTC virgen: semilla (la hora absoluta da igual,
@@ -597,7 +597,7 @@ void loop() {
   handleSerial();
   netService(now);
   bool gpsPage = clockOpen && setPage == SETP_GPS;
-  gpsPoll(now, gpsPage || gpsBootWindow(now));
+  gpsPoll(now, gpsPage);  // el GNSS solo funciona con su pagina abierta
   static uint32_t gpsSeen = 0;
   if (gpsPage && gpsGen() != gpsSeen) { gpsSeen = gpsGen(); clockDirty = true; }
   ensureMon();

@@ -7,7 +7,6 @@
 
 void gpsBegin();                        // setup(), after Wire.begin(): releases the module reset, probes it
 bool gpsPresent();                      // false on boards without the GNSS module
-void gpsPoll(uint32_t now, bool wanted); // loop(): reads NMEA about once a second while wanted
+void gpsPoll(uint32_t now, bool wanted); // loop(): module on and NMEA read once a second while wanted, else in reset
 const GpsInfo &gpsInfo();
 uint32_t gpsGen();                      // changes whenever new data arrived (redraw)
-bool gpsBootWindow(uint32_t now);       // first minutes after start-up: log the position on the serial port
