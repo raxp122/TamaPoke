@@ -369,6 +369,34 @@ static void testCandyForgivesSlipUpOrRaisesBond() {
   EXPECT_EQ(pet.candies, 0);
 }
 
+static void testSlipUpOnlyAfterSixLowHours() {
+  Pet pet = hatchedPet(4);
+  pet.careMistakes = 0;
+  uint32_t t = gMockMillis;
+  pet.update(t);
+  // five hours with an empty need: no slip-up yet (a day at work)
+  pet.fullness = 0;
+  for (int i = 0; i < 300; i++) { pet.fullness = 0; t += PET_TICK_MS; pet.update(t); }
+  EXPECT_EQ(pet.careMistakes, 0);
+  // fed in between: the count starts again
+  pet.fullness = pet.joy = pet.energy = pet.hygiene = 90;
+  t += PET_TICK_MS; pet.update(t);
+  for (int i = 0; i < 359; i++) { pet.fullness = 0; t += PET_TICK_MS; pet.update(t); }
+  EXPECT_EQ(pet.careMistakes, 0);
+  pet.fullness = 0; t += PET_TICK_MS; pet.update(t);
+  EXPECT_EQ(pet.careMistakes, 1);
+}
+
+static void testShakeStatusExplainsRefusal() {
+  Pet pet = hatchedPet(4);
+  pet.setClock(3 * 86400);
+  EXPECT_EQ(pet.shakeStatus(), 0);
+  EXPECT_TRUE(pet.applyShake());
+  EXPECT_EQ(pet.shakeStatus(), 2);
+  pet.sleeping = true;
+  EXPECT_EQ(pet.shakeStatus(), 1);
+}
+
 static void testFrameIsAutomaticUnlessChosen() {
   Pet pet = hatchedPet(4);
   EXPECT_TRUE(pet.frameAuto);
@@ -1273,6 +1301,8 @@ int main() {
   testDailyBattleGoalCompletesOnWinOnly();
   testCandyForgivesSlipUpOrRaisesBond();
   testFrameIsAutomaticUnlessChosen();
+  testSlipUpOnlyAfterSixLowHours();
+  testShakeStatusExplainsRefusal();
   testCaughtDexIsSeparateFromRaisedDex();
   testCaughtPokemonAdvanceDailyCatchGoal();
   testDexRewardsApplyOnceAndCap();

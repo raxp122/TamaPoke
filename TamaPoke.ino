@@ -677,19 +677,30 @@ void loop() {
       sfxPlay(SFX_TAP);
     } else if (mainScreenReadyForShake()) {
       lastInteract = now;
-      if (pmd.has(PMD_POSE)) {
-        beh.mode = 2;
-        beh.act = PMD_POSE;
-        beh.t0 = now;
-        beh.until = now + pmdActTotalMs(pmd.acts[PMD_POSE]);
-      }
-      if (pet.applyShake()) {
-        if (audioMode() == SOUND_FULL) speciesChirpPlay(pet.speciesId, true);
-        else sfxPlay(SFX_HEART);
-        snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_HAPPY_FB));
+      // cada sacudida detectada da respuesta: asi se distingue "no lo detecto"
+      // de "lo detecto pero ahora no toca" (duerme, espera o tope del dia)
+      uint8_t why = pet.shakeStatus();
+      if (why) {
+        StrId msg = why == 1 ? S_SHAKE_SLEEP : (why == 2 ? S_SHAKE_WAIT : S_SHAKE_LIMIT);
+        snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(msg));
         petEventFeedbackUntil = now + 1600;
-      } else {
         sfxPlay(SFX_TAP);
+        markUiDirty();
+      } else {
+        if (pmd.has(PMD_POSE)) {
+          beh.mode = 2;
+          beh.act = PMD_POSE;
+          beh.t0 = now;
+          beh.until = now + pmdActTotalMs(pmd.acts[PMD_POSE]);
+        }
+        if (pet.applyShake()) {
+          if (audioMode() == SOUND_FULL) speciesChirpPlay(pet.speciesId, true);
+          else sfxPlay(SFX_HEART);
+          snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(S_HAPPY_FB));
+          petEventFeedbackUntil = now + 1600;
+        } else {
+          sfxPlay(SFX_TAP);
+        }
       }
     }
   }
@@ -3373,8 +3384,8 @@ void acceptPetEvent() {
   sfxPlay(type == PET_EVENT_BERRY ? SFX_EAT : (type == PET_EVENT_SPARKLE ? SFX_EVENT_SPARKLE : SFX_HEART));
 }
 
-bool mainScreenReadyForShake() {
-  if (screenOff || pet.awaitingStarter() || pet.isEgg() || pet.sleeping || pet.ceremony) return false;
+bool mainScreenReadyForShake() {  // (durmiendo tambien: el aviso dice que duerme)
+  if (screenOff || pet.awaitingStarter() || pet.isEgg() || pet.ceremony) return false;
   if (battleOpen || gameOpen || gameMenuOpen || sackOpen || galleryOpen || kbOpen || clockOpen || helpOpen) return false;
   if (feedMenuUntil || confirmUntil || choiceKind || bathUntil) return false;
   if (pet.evolving()) return false;
