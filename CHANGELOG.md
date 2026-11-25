@@ -6,6 +6,13 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Lock**: a display locked with PWR is woken only by PWR; holding a finger on
+  the screen no longer unlocks it.
+- **Shake** removed: shaking the board does nothing any more (it was detected
+  too often). Petting is tapping the Pokémon.
+
+## 1.37.86 — Gentler needs
+
 - **Gentler needs**: FOOD, JOY and HYG go from full to empty in about 6 hours
   while the Pokémon is awake (they used to empty in 1-2 hours); asleep they
   do not drop at all. Each poop on the floor makes hygiene drop faster.

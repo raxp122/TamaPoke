@@ -132,5 +132,8 @@ pwr                  # grid -> main
 shot 42_back_main
 pwr                  # main: locks the screen
 shot 43_locked
+hold 233 233 1500
+wait 500
+shot 43b_locked_after_touch
 pwr                  # wakes up
 shot 44_awake
