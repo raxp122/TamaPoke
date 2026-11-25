@@ -54,8 +54,12 @@ sleeps the screen dims only on the main screen.
 **Food**: the food button opens a wheel with Razz, Oran and Lum Berry, a Potion
 and, when you have one, a candy. Turn your finger (or tap an item on the ring),
 then tap the centre. A berry gives +25 FOOD; the favourite one +40 and no
-hunger for an hour. A Potion gives +30 ENE (sleep refills energy only at
-night). Joy comes from the minigames.
+hunger for an hour. A Potion fills ENE completely. Every minigame played to the
+end fills JOY.
+
+**Needs**: FOOD, JOY and HYG go from full to empty in about 6 hours while the
+Pokémon is awake (poop on the floor speeds up HYG) and do not drop while it
+sleeps. ENE is spent by the games and refilled by sleep or a Potion.
 
 **Sleep**: the Pokémon goes to bed only between 19:00 and 9:00 (light button);
 you can wake it up or keep it up in the evening. At 9:00 it wakes up by itself.

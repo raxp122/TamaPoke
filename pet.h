@@ -19,6 +19,7 @@
 #define SLEEP_UNTIL_HOUR 9                 // ...hasta las 9:00 (se despierta solo)
 #define NIGHT_AWAKE_MAX 360                // 14 h de ventana - 8 h de sueno: mas despierto = descuido
 #define FAV_BERRY_HOLD 60                  // la preferida: 1 h sin hambre
+#define NEED_DECAY_MIN 360                 // comida, alegria e higiene: de 100 a 0 en ~6 h despierto
 #define POOP_MIN_MINUTES 90                // nunca dos cacas en menos de 90 min (media ~2 h)
 #define MISTAKE_LOW_MINUTES 360           // descuido: 6 h seguidas con una necesidad a <= 10
 #define RUNAWAY_TICKS 720                  // lista para escaparse tras 12 h despierta con TODO a cero
@@ -380,6 +381,8 @@ private:
   uint8_t eggTaps = 0;
   uint16_t lowMinutes = 0;      // minutos seguidos (despierto) con una necesidad a <= 10
   uint16_t poopMinutes = 0;     // minutos despierto desde la ultima caca
+  uint16_t decayAcc = 0;        // reparto de la bajada de las necesidades (100 puntos en NEED_DECAY_MIN)
+  uint8_t needDecaySteps();     // puntos que bajan este minuto (0 o 1)
   uint8_t fullHoldMinutes = 0;  // baya preferida: la saciedad no baja durante este tiempo
   uint16_t nightAwakeMin = 0;   // minutos despierto (en vivo) en la ventana de 19:00 a 9:00
   bool nightWindowPrev = false; // el tick anterior estaba dentro de la ventana de noche
