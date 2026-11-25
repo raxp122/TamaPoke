@@ -40,10 +40,9 @@ installs it from **Settings › UPDATE**. See [Wi-Fi and updates](#wi-fi-and-upd
 | Swipe up | cards: profile, personality, daily, box, battle, medals, progress, expedition, steps (swipe sideways to change card) |
 | Swipe down | settings |
 | Swipe sideways | Pokédex |
-| **Short PWR press** | **back**: closes the open screen; on the main screen it locks the display (PWR again wakes it) |
+| **Short PWR press** | **back**: closes the open screen; on the main screen it locks the display (only PWR wakes it, touch does not) |
 | Long PWR press | power off |
 | Hold the Pokémon 3 s | release dialog |
-| Shake the board | a little joy (8 times a day, one every 25 s); otherwise it says why not (asleep, wait, enough for today) |
 
 The main screen shows the four needs as arcs along the edge (**FOOD** and
 **ENE** on the left, **JOY** and **HYG** on the right, each with the icon of its
