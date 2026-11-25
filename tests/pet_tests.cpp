@@ -485,7 +485,7 @@ static void testFavouriteBerryFillsLongerButNoJoyOrEnergy() {
   pet.update(t);
   for (int i = 0; i < FAV_BERRY_HOLD; i++) { pet.lastSeenEpoch += 60; t += PET_TICK_MS; pet.update(t); }
   EXPECT_EQ(pet.fullness, 70);  // one hour without hunger
-  pet.lastSeenEpoch += 60; t += PET_TICK_MS; pet.update(t);
+  for (int i = 0; i < 5; i++) { pet.lastSeenEpoch += 60; t += PET_TICK_MS; pet.update(t); }
   EXPECT_TRUE(pet.fullness < 70);
 }
 
@@ -494,8 +494,9 @@ static void testPotionRestoresEnergy() {
   pet.lastSeenEpoch = atHour(50, 12);
   pet.energy = 10;
   EXPECT_TRUE(pet.drinkEnergy());
-  EXPECT_EQ(pet.energy, 40);
-  for (int i = 0; i < 5; i++) EXPECT_TRUE(pet.drinkEnergy());  // no daily limit
+  EXPECT_EQ(pet.energy, 100);  // a Potion fills energy
+  pet.energy = 30;
+  EXPECT_TRUE(pet.drinkEnergy());  // no daily limit
   EXPECT_EQ(pet.energy, 100);
   pet.sleeping = true;
   EXPECT_TRUE(!pet.drinkEnergy());
@@ -1008,39 +1009,61 @@ static void testDayphaseHelpers() {
   EXPECT_TRUE(isVisualNight(14, true));
 }
 
-static void testNightHungerDropsSlowerWhenAwake() {
-  Pet dayPet = hatchedPet(4);
-  dayPet.fullness = 80;
-  dayPet.sleeping = false;
-  dayPet.lastSeenEpoch = kNoonEpoch;
+// needs: food, joy and hygiene go from 100 to 0 in about six awake hours;
+// energy does not drop by itself; asleep nothing drops
+static void testNeedsTakeSixHoursAndSleepPausesThem() {
+  Pet pet = hatchedPet(4);
+  pet.fullness = pet.hygiene = 100;
+  pet.joy = 100;
+  pet.energy = 60;
+  pet.poops = 0;
+  pet.lastSeenEpoch = kNoonEpoch;
   gMockMillis = 0;
-  EXPECT_TRUE(dayPet.update(PET_TICK_MS));
-  EXPECT_EQ(dayPet.fullness, 78);
+  uint32_t t = 0;
+  for (int i = 0; i < 180; i++) { pet.poops = 0; t += PET_TICK_MS; pet.update(t); }  // three hours
+  EXPECT_TRUE(pet.fullness >= 48 && pet.fullness <= 52);
+  EXPECT_TRUE(pet.hygiene >= 48 && pet.hygiene <= 52);
+  EXPECT_EQ(pet.energy, 60);  // energy is spent by actions only
+  for (int i = 0; i < 180; i++) { pet.poops = 0; t += PET_TICK_MS; pet.update(t); }  // six hours
+  EXPECT_TRUE(pet.fullness <= 2);
 
-  Pet nightPet = hatchedPet(4);
-  nightPet.fullness = 80;
-  nightPet.sleeping = false;
-  nightPet.lastSeenEpoch = kNightEpoch;
-  gMockMillis = 0;
-  EXPECT_TRUE(nightPet.update(PET_TICK_MS));
-  EXPECT_EQ(nightPet.fullness, 79);
+  Pet sleeper = hatchedPet(4);
+  sleeper.fullness = sleeper.joy = sleeper.hygiene = 80;
+  sleeper.energy = 10;
+  sleeper.sleeping = true;
+  sleeper.lastSeenEpoch = kNightEpoch;
+  t = 0;
+  for (int i = 0; i < 60; i++) { t += PET_TICK_MS; sleeper.update(t); }
+  EXPECT_EQ(sleeper.fullness, 80);
+  EXPECT_EQ(sleeper.hygiene, 80);
+  EXPECT_EQ(sleeper.energy, 100);
   gMockMillis = 0;
 }
 
-static void testOfflineNightHungerUsesHourOfEachMinute() {
+static void testOfflineNeedsUseTheSameRate() {
   Pet pet = hatchedPet(4);
-  pet.setClock(kNightEpoch);
+  pet.setClock(kNoonEpoch);
   pet.fullness = 80;
   pet.sleeping = false;
-  pet.syncClock(kNightEpoch + 5UL * 60UL);
-  EXPECT_EQ(pet.fullness, 75);
+  pet.syncClock(kNoonEpoch + 36UL * 60UL);  // 36 min = 10 points
+  EXPECT_EQ(pet.fullness, 70);
 
-  Pet dayPet = hatchedPet(4);
-  dayPet.setClock(kNoonEpoch);
-  dayPet.fullness = 80;
-  dayPet.sleeping = false;
-  dayPet.syncClock(kNoonEpoch + 5UL * 60UL);
-  EXPECT_EQ(dayPet.fullness, 70);
+  Pet sleeper = hatchedPet(4);
+  sleeper.setClock(kNightEpoch);
+  sleeper.fullness = 80;
+  sleeper.sleeping = true;
+  sleeper.syncClock(kNightEpoch + 8UL * 3600UL);
+  EXPECT_EQ(sleeper.fullness, 80);
+}
+
+static void testMinigameFillsJoy() {
+  Pet pet = hatchedPet(4);
+  pet.joy = 10;
+  pet.applyCatchResult(2);
+  EXPECT_EQ(pet.joy, 100);
+  pet.joy = 5;
+  pet.playResult(0);
+  EXPECT_EQ(pet.joy, 100);
 }
 
 static void testShakePlayHasCooldownAndDailyCap() {
@@ -1444,8 +1467,9 @@ int main() {
   testExpeditionItemsCapAndConsumeSafely();
   testExpeditionHudStates();
   testDayphaseHelpers();
-  testNightHungerDropsSlowerWhenAwake();
-  testOfflineNightHungerUsesHourOfEachMinute();
+  testNeedsTakeSixHoursAndSleepPausesThem();
+  testOfflineNeedsUseTheSameRate();
+  testMinigameFillsJoy();
   testShakePlayHasCooldownAndDailyCap();
   testWalkGivesCappedJoyAndBond();
   testStepCounterRewardsAndDailyReset();

@@ -133,20 +133,15 @@ void Pet::syncClock(uint32_t nowEpoch) {
       if (ageMinutes >= 3) hatch();  // eclosiona en tu ausencia
       continue;
     }
-    if (sleeping) {  // descanso: baja lento y con suelo, igual que en vivo
+    if (sleeping) {  // la noche no cuenta: durmiendo nada baja y la energia se llena
       energy = clamp100(energy + 6);
-      if (ageMinutes % 2 == 0) {
-        fullness = dropTo(fullness, 1, 30);
-        joy = dropTo(joy, 1, 35);
-      }
-      if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
       continue;
     }
-    uint32_t minuteEpoch = seen + (i + 1UL) * 60UL;
-    fullness = dropTo(fullness, nightFoodDrop(minuteEpoch), 15);
-    energy = dropTo(energy, 1, 15);
-    hygiene = dropTo(hygiene, 1, 15);
-    joy = dropTo(joy, 1, 15);
+    // despierto: el mismo ritmo que en vivo (~6 h de 100 a 0), con suelo en 15
+    uint8_t st = needDecaySteps();
+    fullness = dropTo(fullness, st, 15);
+    hygiene = dropTo(hygiene, st, 15);
+    joy = dropTo(joy, st, 15);
   }
   if (!isEgg()) {
     if (!sleeping) {  // durmiendo no ensucia
@@ -213,14 +208,9 @@ void Pet::tick() {
   // mas lento que despierto y con suelo (amanece pidiendo algo de mimo, no a
   // cero, sin descuidos ni escapadas). despierto: comida -2/min, hig/joy -1/min.
   // El peso aun se quema; la racha de buen cuidado (goodTicks) queda en pausa.
-  if (sleeping) {
+  if (sleeping) {  // la noche no cuenta: nada baja, la energia se llena
     energy = clamp100(energy + 6);
     if (weight > 0 && ageMinutes % 3 == 0) weight--;
-    if (ageMinutes % 2 == 0) {                 // ~4x mas lento que despierto
-      fullness = dropTo(fullness, 1, 30);
-      joy = dropTo(joy, 1, 35);
-    }
-    if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
     checkMedals();  // aun puede cruzar un nivel por edad mientras duerme
     if (++ticksSinceSave >= 5) pendingSave = true;
     return;
@@ -228,9 +218,11 @@ void Pet::tick() {
 
   if (ageMinutes % MINUTES_PER_LEVEL == 0) sfxPlay(SFX_LEVEL);  // subio de nivel (despierto)
 
+  // comida, alegria e higiene: de 100 a 0 en ~6 h despierto. La energia no baja
+  // sola: la gastan los juegos y la devuelven el sueno o la Pocion.
+  uint8_t st = needDecaySteps();
   if (fullHoldMinutes) fullHoldMinutes--;  // la baya preferida sacia mas tiempo
-  else fullness = clamp100(fullness - nightFoodDrop(lastSeenEpoch));
-  energy = clamp100(energy - 1);
+  else fullness = clamp100(fullness - st);
   // caca: como mucho una cada 90 min despierto (antes 15 %/min, una cada ~7 min)
   if (poopMinutes < 0xFFFF) poopMinutes++;
   if (fullness > 40 && poops < 3 && poopMinutes >= POOP_MIN_MINUTES && random(100) < 5) {
@@ -238,9 +230,7 @@ void Pet::tick() {
     poopMinutes = 0;
   }
 
-  hygiene = clamp100(hygiene - 1 - 2 * poops);
-  // el sobrepeso da pereza: la energia cae el doble
-  if (weight > 50) energy = clamp100(energy - 1);
+  hygiene = clamp100(hygiene - st * (1 + poops));  // cada caca acelera la suciedad
   if (weight > 0 && ageMinutes % 3 == 0) weight--;
 
   // la disciplina forja la defensa: 12 h seguidas bien cuidado = +1 DEF
@@ -253,10 +243,10 @@ void Pet::tick() {
     goodTicks = 0;
   }
 
-  int dJoy = -1;
-  if (fullness < 30) dJoy -= 2;
-  if (hygiene < 30) dJoy -= 2;
-  joy = clamp100(joy + dJoy);
+  int dJoy = st;
+  if (fullness < 30) dJoy += st;  // hambre o suciedad: la alegria baja mas rapido
+  if (hygiene < 30) dJoy += st;
+  joy = clamp100(joy - dJoy);
 
   // Descuido: una necesidad por los suelos (<= 10) durante 6 h seguidas con el
   // bicho despierto. Mirarlo por la manana, a mediodia y por la tarde basta;
@@ -996,7 +986,7 @@ void Pet::playResult(uint8_t score) {
   if (ceremony != CER_NONE || isEgg()) return;
   uint8_t v = trSpe + score / 5;  // jugar entrena la velocidad
   trSpe = v > 100 ? 100 : v;
-  joy = clamp100(joy + 5 + (score > 15 ? 30 : score * 2));
+  joy = 100;  // un minijuego llena la alegria
   energy = dropTo(energy, 10 + score / 2, 5);
   fullness = dropTo(fullness, 5, 5);
   int burn = (int)weight - score * 2;  // el ejercicio quema peso
@@ -1015,7 +1005,7 @@ uint8_t Pet::applyTiltResult(uint8_t score) {
   if (gain > 12) gain = 12;
   uint8_t v = trDef + gain;
   trDef = v > 100 ? 100 : v;
-  joy = clamp100(joy + 4 + (score > 12 ? 20 : score));
+  joy = 100;  // un minijuego llena la alegria
   energy = dropTo(energy, 8 + score / 3, 5);
   fullness = dropTo(fullness, 4, 5);
   int burn = (int)weight - score;
@@ -1034,7 +1024,7 @@ uint8_t Pet::applyCatchResult(uint8_t score) {
   if (gain > 12) gain = 12;
   uint8_t v = trSpe + gain;
   trSpe = v > 100 ? 100 : v;
-  joy = clamp100(joy + 4 + (score > 12 ? 20 : score));
+  joy = 100;  // un minijuego llena la alegria
   energy = dropTo(energy, 8 + score / 3, 5);
   fullness = dropTo(fullness, 4, 5);
   int burn = (int)weight - score;
@@ -1054,7 +1044,7 @@ uint8_t Pet::applyMemoResult(uint8_t rounds) {
   if (gain > 10) gain = 10;
   uint8_t v = trDef + gain;
   trDef = v > 100 ? 100 : v;
-  joy = clamp100(joy + 5 + (rounds > 8 ? 18 : rounds * 2));
+  joy = 100;  // un minijuego llena la alegria
   energy = dropTo(energy, 6 + rounds / 2, 5);
   fullness = dropTo(fullness, 3, 5);
   if (rounds >= 4) heartUntil = millis() + HEART_MS;
@@ -1071,7 +1061,7 @@ uint8_t Pet::applyCleanResult(uint8_t score) {
   uint8_t gain = score / 2;
   if (gain > 18) gain = 18;
   hygiene = clamp100((int)hygiene + 20 + score * 3);
-  joy = clamp100((int)joy + 3 + (score > 10 ? 12 : score));
+  joy = 100;  // un minijuego llena la alegria
   energy = dropTo(energy, 4 + score / 4, 8);
   if (poops && score >= 4) poops--;
   if (score >= 6) heartUntil = millis() + HEART_MS;
@@ -1089,7 +1079,7 @@ uint8_t Pet::applyTypeResult(uint8_t score) {
   if (gain > 10) gain = 10;
   uint8_t v = trAtk + gain;
   trAtk = v > 100 ? 100 : v;
-  joy = clamp100((int)joy + 4 + (score > 12 ? 18 : score));
+  joy = 100;  // un minijuego llena la alegria
   energy = dropTo(energy, 5 + score / 3, 8);
   fullness = dropTo(fullness, 2, 5);
   if (score >= 5) heartUntil = millis() + HEART_MS;
@@ -1619,9 +1609,16 @@ uint8_t Pet::toggleLight() {
   return sleeping ? 1 : 2;
 }
 
+uint8_t Pet::needDecaySteps() {
+  decayAcc += 100;
+  uint8_t st = 0;
+  while (decayAcc >= NEED_DECAY_MIN) { decayAcc -= NEED_DECAY_MIN; st++; }
+  return st;
+}
+
 bool Pet::drinkEnergy() {
   if (ceremony != CER_NONE || isEgg() || sleeping) return false;
-  energy = clamp100(energy + 30);
+  energy = 100;  // la Pocion llena la energia
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
   save();

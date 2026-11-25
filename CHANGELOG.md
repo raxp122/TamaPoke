@@ -6,6 +6,15 @@ Build numbers are not consecutive: they count every CI run.
 
 ## Next
 
+- **Gentler needs**: FOOD, JOY and HYG go from full to empty in about 6 hours
+  while the Pokémon is awake (they used to empty in 1-2 hours); asleep they
+  do not drop at all. Each poop on the floor makes hygiene drop faster.
+- **Energy** no longer drops by itself: games use it, sleep at night refills
+  it, and a **Potion** now fills it completely.
+- **Every minigame** played to the end fills JOY completely.
+
+## 1.37.84 — Ball catching game, Clean without lives
+
 - **Ball** is now a catching game: tilt the board to move the Pokémon at the
   bottom and catch the falling Poké Balls. They fall faster and more often with
   the score; from 5 points Voltorb fall too: catching one ends the game, three

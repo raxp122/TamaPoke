@@ -1937,7 +1937,7 @@ void renderFoodWheel() {
   if (kind <= FOOD_GREEN) {
     if (fav) snprintf(fx, sizeof(fx), "+40 %s 1h", T(S_BAR_FOOD));
     else snprintf(fx, sizeof(fx), "+25 %s", T(S_BAR_FOOD));
-  } else if (kind == FOOD_DRINK) snprintf(fx, sizeof(fx), "+30 %s", T(S_BAR_ENE));
+  } else if (kind == FOOD_DRINK) snprintf(fx, sizeof(fx), "%s 100%%", T(S_BAR_ENE));
   else snprintf(fx, sizeof(fx), "x%u", pet.candies);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
